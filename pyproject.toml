@@ -1,0 +1,18 @@
+[project]
+name = "seerAD"
+version = "0.1.0"
+description = "SeerAD - Semi-automated AD CTF Assistant"
+authors = [{name = "sado"}]
+dependencies = [
+    "typer[all]",
+    "rich",
+    "appdirs"
+]
+requires-python = ">=3.8"
+
+[project.scripts]
+seerAD = "seerAD.cli.main:app"
+
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
