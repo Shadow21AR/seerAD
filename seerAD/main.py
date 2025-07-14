@@ -13,13 +13,45 @@ from typing import List
 from prompt_toolkit import PromptSession
 from prompt_toolkit.completion import Completer, Completion, CompleteEvent
 from prompt_toolkit.document import Document
-from prompt_toolkit.history import FileHistory
+from prompt_toolkit.history import FileHistory as BaseFileHistory
 from prompt_toolkit.styles import Style
 from rich.console import Console
 
 # Local application imports
 from seerAD.cli.main import app as typer_app
-from seerAD.config import DATA_DIR, ROOT_DIR
+from seerAD.config import DATA_DIR
+
+class LimitedFileHistory(BaseFileHistory):
+    """File history that limits the number of entries to prevent the history file from growing too large."""
+    def __init__(self, filename: str, max_size: int = 1000):
+        super().__init__(filename)
+        self.max_size = max_size
+        self._trim_history()
+
+    def _trim_history(self):
+        """Trim the history file to the maximum size."""
+        try:
+            # Read all lines from the file
+            with open(self.filename, 'r', encoding='utf-8') as f:
+                lines = f.readlines()
+
+            # If we're under the limit, do nothing
+            if len(lines) <= self.max_size:
+                return
+
+            # Keep only the most recent entries
+            lines = lines[-self.max_size:]
+
+            # Write them back to the file
+            with open(self.filename, 'w', encoding='utf-8') as f:
+                f.writelines(lines)
+
+        except Exception as e:
+            console.print(f"[yellow][!] Warning: Could not trim history file: {e}[/]")
+
+    def append(self, string: str) -> None:
+        super().append(string)
+        self._trim_history()
 
 # Rich console theme for consistent styling
 class SeerTheme:
@@ -135,13 +167,12 @@ class SeerCompleter(Completer):
 
     def get_target_labels(self) -> List[str]:
         """Get list of all target labels from the session.
-        
         Returns:
             List of target labels
         """
         try:
             from seerAD.core.session import session
-            return list(session.list_targets().keys())
+            return list(session.targets.keys())
         except Exception as e:
             console.print(f"[yellow][!] Error getting target labels: {e}[/]")
             return []
@@ -356,7 +387,7 @@ def run_interactive() -> None:
     
     try:
         prompt = PromptSession(
-            history=FileHistory(str(history_file)),
+            history=LimitedFileHistory(str(history_file), max_size=1000),
             style=PROMPT_STYLE,
             completer=seer_commands,
             complete_while_typing=True,

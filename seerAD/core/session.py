@@ -1,167 +1,162 @@
-import json
 from pathlib import Path
 from typing import Dict, Optional, Any, List
+import json
 from seerAD.config import LOOT_DIR, DATA_DIR
-from seerAD.core import creds
-from ipaddress import ip_address, AddressValueError
-from datetime import datetime
+from . import creds
+from .target import Target, TargetManager
 
 class Session:
     def __init__(self):
-        self.targets: Dict[str, Dict[str, Any]] = {}
-        self.current_target_label: Optional[str] = None
+        self.session_file = LOOT_DIR / "session.json"
+        self._credential_managers: Dict[str, creds.CredentialManager] = {}
+        self.target_manager = TargetManager(self.session_file)
         self.current_credential_index: Optional[int] = None
-        self.ensure_workspace()
-        self.load_session()
+        self._ensure_workspace()
+        self._load()
 
-    def ensure_workspace(self) -> None:
-        """Ensure all required directories exist and session is initialized."""
-
-        # Create required directories if they don't exist
+    def _ensure_workspace(self):
         LOOT_DIR.mkdir(parents=True, exist_ok=True)
         DATA_DIR.mkdir(parents=True, exist_ok=True)
 
-        # Initialize empty session if one doesn't exist
-        session_file = LOOT_DIR / "session.json"
-        if not session_file.exists():
-            self.reset()
-            self.save_session()
+    def reset(self):
+        self.target_manager = TargetManager(self.session_file)
+        self.current_credential_index = None
+        self._save()
 
-    def _session_file(self) -> Path:
-        return LOOT_DIR / "session.json"
-
-    def load_session(self):
-        path = self._session_file()
-        if path.exists():
-            try:
-                with open(path, "r") as f:
-                    data = json.load(f)
-                self.targets = data.get("targets", {})
-                self.current_target_label = data.get("current_target_label")
-                self.current_credential_index = data.get("current_credential_index")
-            except Exception:
-                self.targets = {}
-                self.current_target_label = None
-                self.current_credential_index = None
-        else:
-            self.targets = {}
-            self.current_target_label = None
+    def _load(self):
+        if not self.session_file.exists():
+            return
+        try:
+            with open(self.session_file) as f:
+                data = json.load(f)
+            self.target_manager.targets = {
+                label: Target.from_dict(label, tdata)
+                for label, tdata in data.get("targets", {}).items()
+            }
+            self.target_manager.current_target_label = data.get("current_target_label")
+            self.current_credential_index = data.get("current_credential_index")
+        except Exception as e:
+            print(f"[!] Error loading session.json: {e}")
+            self.target_manager.targets = {}
+            self.target_manager.current_target_label = None
             self.current_credential_index = None
 
-    def save_session(self):
-        path = self._session_file()
-        path.parent.mkdir(parents=True, exist_ok=True)
+    def _save(self):
         data = {
-            "targets": self.targets,
-            "current_target_label": self.current_target_label,
-            "current_credential_index": self.current_credential_index,
+            "targets": {l: t.to_dict() for l, t in self.target_manager.targets.items()},
+            "current_target_label": self.target_manager.current_target_label,
+            "current_credential_index": self.current_credential_index
         }
-        with open(path, "w") as f:
+        self.session_file.parent.mkdir(parents=True, exist_ok=True)
+        with open(self.session_file, "w") as f:
             json.dump(data, f, indent=2)
 
-    def reset(self):
-        self.targets = {}
-        self.current_target_label = None
-        self.current_credential_index = None
-
-    def save(self):
-        self.save_session()
-
-    # Target management
-    def validate_ip(self, ip: str) -> bool:
-        try:
-            ip_address(ip)
-            return True
-        except AddressValueError:
-            return False
-
-    def list_targets(self) -> Dict[str, Dict[str, Any]]:
-        return self.targets
-
-    def add_target(self, label: str, target_info: Dict[str, Any]) -> None:
-        self.targets[label] = target_info
-        self.save_session()
-
-    def delete_target(self, label: str) -> bool:
-        if label in self.targets:
-            del self.targets[label]
-            # Remove creds.json for target
-            creds_path = LOOT_DIR / label / "creds.json"
-            if creds_path.exists():
-                creds_path.unlink()
-
-            if self.current_target_label == label:
-                self.current_target_label = None
-                self.current_credential_index = None
-            self.save_session()
-            return True
-        return False
-
-    def switch_target(self, label: str) -> bool:
-        if label in self.targets:
-            self.current_target_label = label
-            self.current_credential_index = None
-            self.save_session()
-            return True
-        return False
-
-    def set_current_target(self, label: str) -> bool:
-        return self.switch_target(label)
-
-    def update_current_target(self, **kwargs) -> bool:
-        if not self.current_target_label or self.current_target_label not in self.targets:
-            return False
-        target = self.targets[self.current_target_label]
-        updated = False
-        for key, value in kwargs.items():
-            if target.get(key) != value:
-                target[key] = value
-                updated = True
-        if updated:
-            target['updated_at'] = datetime.utcnow().isoformat()
-            self.save_session()
-        return updated
+    # === Target Shortcuts ===
+    @property
+    def targets(self): return self.target_manager.targets
 
     @property
-    def current_target(self) -> Optional[Dict[str, Any]]:
-        if self.current_target_label:
-            return self.targets.get(self.current_target_label)
-        return None
+    def current_target_label(self): return self.target_manager.current_target_label
 
-    # Credential management delegating to core.creds
-    def get_credentials(self, label: Optional[str] = None, username: Optional[str] = None, auth_type: Optional[str] = None) -> List[Dict[str, Any]]:
-        label = label or self.current_target_label
-        if not label:
-            return []
-        return creds.get_credentials(label, username=username, auth_type=auth_type)
+    @property
+    def current_target(self): 
+        t = self.target_manager.get_current_target()
+        return t.to_dict() if t else None
 
-    def add_credential(self, label: str, cred_data: Dict[str, Any]) -> bool:
-        return creds.add_credential(label, cred_data)
+    def add_target(self, label, ip, **kwargs):
+        added = self.target_manager.add_target(label, Target(label, ip, **kwargs))
+        if added:
+            self._save()
+        return added
 
-    def delete_credential(self, label: str, username: str, auth_type: Optional[str] = None) -> bool:
-        return creds.delete_credential(label, username, auth_type)
+    def delete_target(self, label):
+        (LOOT_DIR / label / "creds.json").unlink(missing_ok=True)
+        if self.current_target_label == label:
+            self.current_credential_index = None
+        deleted = self.target_manager.delete_target(label)
+        if deleted:
+            self._save()
+        return deleted
 
-    # Current credential tracking by index (in the credentials list)
-    def use_credential(self, index: int) -> bool:
-        creds_list = self.get_credentials(self.current_target_label)
-        if 0 <= index < len(creds_list):
-            self.current_credential_index = index
-            self.save_session()
+    def switch_target(self, label): 
+        if self.target_manager.switch_target(label):
+            self.current_credential_index = None
+            self._save()
             return True
+        return False
+
+    def update_current_target(self, **kwargs):
+        updated = self.target_manager.update_current_target(**kwargs)
+        if updated:
+            self._save()
+        return updated
+
+    # === Credential Handling ===
+    def _get_cred_mgr(self, label=None) -> Optional[creds.CredentialManager]:
+        label = label or self.current_target_label
+        if not label: return None
+        if label not in self._credential_managers:
+            self._credential_managers[label] = creds.CredentialManager(label)
+        return self._credential_managers[label]
+
+    def get_credentials(self, label=None, username=None) -> List[Dict[str, Any]]:
+        mgr = self._get_cred_mgr(label)
+        if not mgr: return []
+        if username:
+            c = mgr.get_credential(username)
+            return [c] if c else []
+        return mgr.get_all_credentials()
+
+    def add_credential(self, label, **kwargs):
+        mgr = self._get_cred_mgr(label)
+        added = mgr.add_credential(**kwargs) if mgr else False
+        if added:
+            self._save()
+        return added
+
+    def update_credential(self, label, username, **kwargs):
+        mgr = self._get_cred_mgr(label)
+        updated = mgr.update_credential(username, **kwargs) if mgr else False
+        if updated:
+            self._save()
+        return updated
+
+    def delete_credential(self, label, username):
+        mgr = self._get_cred_mgr(label)
+        if not mgr:
+            return False
+
+        # Reset current credential index if deleting the selected one
+        if label == self.current_target_label and self.current_credential:
+            if self.current_credential.get("username", "").lower() == username.lower():
+                self.current_credential_index = None
+
+        deleted = mgr.delete_credential(username)
+        if deleted:
+            self._save()
+        return deleted
+
+    def use_credential(self, username):
+        mgr = self._get_cred_mgr()
+        if not mgr: return False
+        creds_list = mgr.get_all_credentials()
+        for i, c in enumerate(creds_list):
+            if c['username'].lower() == username.lower():
+                self.current_credential_index = i
+                self._save()
+                return True
         return False
 
     @property
     def current_credential(self) -> Optional[Dict[str, Any]]:
         if self.current_target_label is None or self.current_credential_index is None:
             return None
-        creds_list = self.get_credentials(self.current_target_label)
+        mgr = self._get_cred_mgr()
+        creds_list = mgr.get_all_credentials() if mgr else []
         if 0 <= self.current_credential_index < len(creds_list):
             return creds_list[self.current_credential_index]
         return None
 
 # Global singleton
 session = Session()
-
-# Convenience proxy for current session
-def current_session():
-    return session
+def current_session(): return session
