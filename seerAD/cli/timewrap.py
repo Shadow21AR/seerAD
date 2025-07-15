@@ -2,6 +2,7 @@ import typer
 import json
 import os
 import sys
+import shutil
 from datetime import datetime
 from pathlib import Path
 from rich.console import Console
@@ -31,12 +32,12 @@ def reset_timewrap_config():
         TIMEWRAP_FILE.unlink()
 
 
+import shutil
+
 def restart_seerad(with_faketime: bool = False):
     """
     Restart SeerAD with or without faketime env.
     """
-    python_path = sys.executable
-    args = [python_path, "-m", "seerAD.main"]
     env = os.environ.copy()
 
     if with_faketime and TIMEWRAP_FILE.exists():
@@ -54,14 +55,19 @@ def restart_seerad(with_faketime: bool = False):
                     env["LD_PRELOAD"] = libfaketime
         except Exception as e:
             console.print(f"[red]✘ Failed to load faketime:[/] {e}")
-
-    elif not with_faketime:
+            return
+    else:
         env.pop("FAKETIME", None)
         env.pop("SEERAD_FAKE_STARTED", None)
         env.pop("LD_PRELOAD", None)
 
+    seerad_bin = shutil.which("seerAD")
+    if not seerad_bin:
+        console.print("[red]✘ Could not find 'seerAD' in PATH.[/]")
+        return
+
     console.print("[cyan]Restarting SeerAD...[/]")
-    os.execvpe(python_path, args, env)
+    os.execvpe(seerad_bin, [seerad_bin], env)
 
 
 @timewrap_app.command("set")
