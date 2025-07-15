@@ -1,6 +1,6 @@
 [project]
 name = "seerAD"
-version = "0.1.0"
+version = "0.1.1"
 description = "SeerAD - Semi-automated AD CTF Assistant"
 authors = [{name = "sado"}]
 license = {text = "MIT"}

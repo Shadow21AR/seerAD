@@ -1,15 +1,12 @@
 import subprocess
 import os
-import typer
-from seerAD.core.session import session
+from typing import List, Tuple, Dict
 from rich.console import Console
+from seerAD.core.session import session
 
 console = Console()
-app = typer.Typer()
 
-
-def build_auth(method: str, cred: dict) -> tuple[list[str], dict]:
-    """Return (nxc args, env vars) based on selected auth method."""
+def build_auth(method: str, cred: dict) -> Tuple[List[str], Dict[str, str]]:
     if method == "ticket":
         ticket = cred.get("ticket")
         if not ticket:
@@ -18,61 +15,48 @@ def build_auth(method: str, cred: dict) -> tuple[list[str], dict]:
 
     if method == "hash":
         if not cred.get("username") or not cred.get("ntlm"):
-            raise ValueError("Credential must include 'username' and 'ntlm' for hash auth.")
+            raise ValueError("Need 'username' and 'ntlm' for hash auth.")
         return ["-u", cred["username"], "-H", cred["ntlm"]], {}
 
     if method == "password":
         if not cred.get("username") or not cred.get("password"):
-            raise ValueError("Credential must include 'username' and 'password' for password auth.")
+            raise ValueError("Need 'username' and 'password' for password auth.")
         return ["-u", cred["username"], "-p", cred["password"]], {}
 
     if method == "anon":
         return ["-u", "''", "-p", "''"], {}
 
+    raise ValueError(f"Unsupported auth method: {method}")
 
-    raise ValueError(f"Unsupported method: {method}")
-
-
-@app.command()
-def run(method: str = typer.Argument(..., help="Auth method: ticket | hash | password | anon")):
-    """
-    Run SMB enum using selected auth method (positional).
-    """
+def run(method: str, extra_args: List[str]):
     if not session.current_target_label:
-        console.print("[red]No active target.[/]")
-        raise typer.Exit()
+        console.print("[red]No active target set.[/]")
+        return
 
     target = session.current_target
     cred = session.current_credential
     ip = target.get("ip")
     fqdn = target.get("fqdn") or target.get("hostname") or ip
-
     if not ip:
-        console.print("[red]No IP set for current target.[/]")
+        console.print("[red]Target IP not set.[/]")
         return
 
     if not cred and method != "anon":
-        console.print("[yellow]No credential selected. Use 'creds use' first or use 'anon'.[/]")
+        console.print("[yellow]No credential selected. Use 'creds use' or use 'anon' mode.[/]")
         return
 
     try:
         target_host = fqdn if method == "ticket" else ip
-        auth_args, env_override = build_auth(method or "anon", cred or {})
+        auth_args, env_vars = build_auth(method, cred or {})
+        cmd = ["nxc", "smb", target_host] + auth_args + extra_args
 
-        cmd = ["nxc", "smb", target_host] + auth_args + ["--shares"]
+        console.print(f"[dim]Running Command:[/] [yellow]{' '.join(cmd)}[/]")
 
-        console.print(f"[dim]Running Command: [/][bold yellow]{' '.join(cmd)}[/]")
-
-        env = dict(os.environ)
-        env.update(env_override)
+        env = os.environ.copy()
+        env.update(env_vars)
 
         result = subprocess.run(cmd, capture_output=True, text=True, env=env)
-        output = result.stdout + result.stderr
-        console.print(output.strip())
+        console.print(result.stdout.strip() + "\n" + result.stderr.strip())
 
-    except FileNotFoundError:
-        console.print("[red]Error: 'nxc' not found in PATH.[/]")
-    except ValueError as ve:
-        console.print(f"[red]{ve}[/]")
     except Exception as e:
-        console.print(f"[red]Unhandled error: {e}[/]")
+        console.print(f"[red]SMB enum error: {e}[/]")

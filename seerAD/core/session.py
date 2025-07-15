@@ -39,6 +39,21 @@ class Session:
             }
             self.target_manager.current_target_label = data.get("current_target_label")
             self.current_credential_index = data.get("current_credential_index")
+            
+            # Restore KRB5CCNAME if there's an active credential with a ticket
+            if self.current_credential_index is not None:
+                mgr = self._get_cred_mgr()
+                if mgr:
+                    creds_list = mgr.get_all_credentials()
+                    if 0 <= self.current_credential_index < len(creds_list):
+                        cred = creds_list[self.current_credential_index]
+                        ticket = cred.get("ticket")
+                        if ticket and Path(ticket).exists():
+                            ticket_path = str(Path(ticket).resolve())
+                            os.environ["KRB5CCNAME"] = ticket_path
+                        else:
+                            os.environ.pop("KRB5CCNAME", None)
+
         except Exception as e:
             print(f"[!] Error loading session.json: {e}")
             self.target_manager.targets = {}
