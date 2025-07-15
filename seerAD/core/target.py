@@ -5,13 +5,11 @@ from datetime import datetime, timezone
 from seerAD.config import LOOT_DIR
 
 class Target:
-    def __init__(self, label: str, ip: str, domain=None, hostname=None, fqdn=None, os="Unknown", created_at=None, updated_at=None):
+    def __init__(self, label: str, ip: str, domain=None, fqdn=None, created_at=None, updated_at=None):
         self.label = label
         self.ip = ip
         self.domain = domain
-        self.hostname = hostname
         self.fqdn = fqdn
-        self.os = os
         self.created_at = created_at or datetime.now(timezone.utc).isoformat()
         self.updated_at = updated_at or self.created_at
         (LOOT_DIR / label).mkdir(parents=True, exist_ok=True)
@@ -30,9 +28,7 @@ class Target:
         return {
             "ip": self.ip,
             "domain": self.domain,
-            "hostname": self.hostname,
             "fqdn": self.fqdn,
-            "os": self.os,
             "created_at": self.created_at,
             "updated_at": self.updated_at
         }

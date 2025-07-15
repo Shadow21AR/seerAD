@@ -142,13 +142,27 @@ class Session:
 
     def use_credential(self, username):
         mgr = self._get_cred_mgr()
-        if not mgr: return False
+        if not mgr:
+            return False
+
         creds_list = mgr.get_all_credentials()
         for i, c in enumerate(creds_list):
             if c['username'].lower() == username.lower():
                 self.current_credential_index = i
+                ticket = c.get("ticket")
+
+                # Handle KRB5CCNAME
+                if ticket and Path(ticket).exists():
+                    ticket_path = str(Path(ticket).resolve())
+                    os.environ["KRB5CCNAME"] = ticket_path
+                    print(f"[✔] KRB5CCNAME set to: {ticket_path}")
+                else:
+                    os.environ.pop("KRB5CCNAME", None)
+                    print("[*] No ticket for this credential. Unsetting KRB5CCNAME.")
+
                 self._save()
                 return True
+
         return False
 
     @property

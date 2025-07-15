@@ -5,15 +5,15 @@ from datetime import datetime, timezone
 from seerAD.config import LOOT_DIR
 
 class Credential:
-    def __init__(self, username, domain=None, password=None, ntlm=None, aes=None, ticket=None, cert=None, token=None, notes=None, created_at=None, updated_at=None):
+    def __init__(self, username, domain=None, password=None, ntlm=None, aes128=None, aes256=None, ticket=None, cert=None, notes=None, created_at=None, updated_at=None):
         self.username = username
         self.domain = domain
         self.password = password
         self.ntlm = ntlm
-        self.aes = aes
+        self.aes128 = aes128
+        self.aes256 = aes256
         self.ticket = ticket
         self.cert = cert
-        self.token = token
         self.notes = notes or ""
         self.created_at = created_at or datetime.now(timezone.utc).isoformat()
         self.updated_at = updated_at or self.created_at
@@ -98,19 +98,3 @@ class CredentialManager:
     def get_all_credentials(self): return [c.to_dict() for c in self.credentials.values()]
     def get_credentials_by_domain(self, domain): 
         return [c.to_dict() for c in self.credentials.values() if c.domain and c.domain.lower() == domain.lower()]
-
-# Backward-compatible helpers
-def save_credentials(label: str, creds_data: List[Dict[str, Any]]):
-    cm = CredentialManager(label)
-    for cd in creds_data:
-        cm.add_credential(**cd)
-
-def get_credentials(label: str, username: Optional[str] = None):
-    cm = CredentialManager(label)
-    return [cm.get_credential(username)] if username else cm.get_all_credentials()
-
-def add_credential(label: str, cred_data: Dict[str, Any]):
-    return CredentialManager(label).add_credential(**cred_data)
-
-def delete_credential(label: str, username: str):
-    return CredentialManager(label).delete_credential(username)

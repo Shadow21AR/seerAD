@@ -8,6 +8,7 @@ import sys
 import termios
 from pathlib import Path
 from typing import List
+import json
 
 # Third-party imports
 from prompt_toolkit import PromptSession
@@ -19,7 +20,9 @@ from rich.console import Console
 
 # Local application imports
 from seerAD.cli.main import app as typer_app
-from seerAD.config import DATA_DIR
+from seerAD.config import DATA_DIR, ROOT_DIR
+
+TIMEWRAP_FILE = ROOT_DIR / "timewrap.json"
 
 class LimitedFileHistory(BaseFileHistory):
     """File history that limits the number of entries to prevent the history file from growing too large."""
@@ -74,6 +77,7 @@ class SeerTheme:
     @classmethod
     def get_style(cls) -> Style:
         return Style.from_dict({
+            "clock": f"{cls.WARNING} bold",
             "prompt": f"{cls.PROMPT} bold",
             "brackets": f"{cls.SEPARATOR}",
             "userinfo": f"{cls.CREDENTIAL} bold",
@@ -126,19 +130,24 @@ class SeerCompleter(Completer):
                 "info": self.get_cred_users,
                 "set": {
                     "password": {},
-                    "ntlm_hash": {},
-                    "aes_key": {},
+                    "ntlm": {},
+                    "aes128": {},
+                    "aes256": {},
                     "ticket": {},
-                    "certificate": {},
+                    "cert": {},
                     "notes": {},
+                    "domain": {},
                 },
-                "fetch": {
-                    "ticket": {},
-                },
+                "fetch": {},
             },
             "enum": {},
             "abuse": {},
             "tasks": {},
+            "timewrap": {
+                "set": {},
+                "reset": {},
+                "status": {},
+            },
             "help": {
                 "reset": {},
                 "target": {},
@@ -146,6 +155,7 @@ class SeerCompleter(Completer):
                 "enum": {},
                 "abuse": {},
                 "tasks": {},
+                "timewrap": {},
                 "exit": {},
                 "quit": {}
             },
@@ -429,7 +439,14 @@ def run_interactive() -> None:
                 display_path = current_dir
                 
             # Build the prompt
+            # Check if timewrap is active
+            timewrap_active = TIMEWRAP_FILE.exists()
+
+            # Optional: show clock icon if active
+            clock_symbol = "◷" if timewrap_active else ""
+
             prompt_text = [
+                ("class:clock", clock_symbol),
                 ("class:prompt", "seer"),
                 ("class:brackets", "["),
                 ("class:userinfo", f"{cred_display}{target_display} "),
@@ -542,6 +559,25 @@ def run_interactive() -> None:
                 console.print_exception()
             console.print(f"[{THEME.INFO}]Type 'exit' or press Ctrl+D to quit.[/]")
             continue
+
+# Only trigger restart if we're not already in faketime mode
+if os.getenv("SEERAD_FAKE_STARTED") != "1":
+    if TIMEWRAP_FILE.exists():
+        try:
+            with open(TIMEWRAP_FILE) as f:
+                data = json.load(f)
+                faketime = data.get("faketime")
+
+            if faketime:
+                env = os.environ.copy()
+                env["FAKETIME"] = faketime
+                env["SEERAD_FAKE_STARTED"] = "1"
+                env["LD_PRELOAD"] = "/usr/lib/x86_64-linux-gnu/faketime/libfaketime.so.1"
+
+                console.print(f"[+] Restarting with faketime: {faketime}")
+                os.execve(sys.executable, [sys.executable, "-m", "seerAD.main"], env)
+        except Exception as e:
+            console.print(f"[!] Failed to apply faketime restart: {e}")
 
 # Entry point function
 def main() -> None:

@@ -9,7 +9,7 @@ from seerAD.core.session import session
 console = Console()
 target_app = typer.Typer(help="Target commands")
 
-ALLOWED_ATTRS = ['ip', 'hostname', 'domain', 'fqdn', 'os']
+ALLOWED_ATTRS = ['ip', 'domain', 'fqdn']
 
 def validate_ip(ip: str) -> bool:
     try:
@@ -24,7 +24,7 @@ def print_target_table(targets: dict, current_label: str = None) -> None:
         return
 
     table = Table(show_header=True, header_style="bold magenta")
-    for col in ["Label", "IP", "Hostname", "Domain", "FQDN", "OS"]:
+    for col in ["Label", "IP", "Domain", "FQDN"]:
         table.add_column(col, style="cyan")
 
     for label, target in targets.items():
@@ -33,10 +33,8 @@ def print_target_table(targets: dict, current_label: str = None) -> None:
         row = [
             f"[bold green]{label}*[/]" if is_current else label,
             f"[bold green]{t.get('ip') or '-'}[/]" if is_current else t.get('ip') or "-",
-            f"[bold green]{t.get('hostname') or '-'}[/]" if is_current else t.get('hostname') or "-",
             f"[bold green]{t.get('domain') or '-'}[/]" if is_current else t.get('domain') or "-",
             f"[bold green]{t.get('fqdn') or '-'}[/]" if is_current else t.get('fqdn') or "-",
-            f"[bold green]{t.get('os') or '-'}[/]" if is_current else t.get('os') or "-",
         ]
         table.add_row(*row)
 
@@ -61,9 +59,7 @@ def target_add(
     label: str = typer.Argument(..., help="Label of the target"),
     ip: str = typer.Argument(..., help="IP address"),
     domain: Optional[str] = typer.Option(None, "--domain", "-d"),
-    hostname: Optional[str] = typer.Option(None, "--hostname", "-h"),
     fqdn: Optional[str] = typer.Option(None, "--fqdn", "-f"),
-    os: Optional[str] = typer.Option(None, "--os", "-o"),
 ):
     """Add a new target."""
     if not validate_ip(ip):
@@ -71,7 +67,7 @@ def target_add(
         return
 
     success = session.add_target(
-        label, ip, domain=domain, hostname=hostname, fqdn=fqdn, os=os or "Unknown"
+        label, ip, domain=domain, fqdn=fqdn
     )
     if not success:
         console.print(f"[red]✘ Target '{label}' already exists[/]")
@@ -85,7 +81,7 @@ def target_add(
 
 @target_app.command("set")
 def target_set(
-    key: str = typer.Argument(..., help="Attribute to set (ip, hostname, domain, fqdn, os)"),
+    key: str = typer.Argument(..., help="Attribute to set (ip, domain, fqdn)"),
     value: str = typer.Argument(..., help="New value (use '' to clear the field)"),
 ):
     """Update an attribute of the current target."""
@@ -123,10 +119,8 @@ def target_info():
     table = Table(show_header=False)
     table.add_row("[bold cyan]Label[/]", session.current_target_label)
     table.add_row("[bold cyan]IP[/]", target.get('ip', '-'))
-    table.add_row("[bold cyan]Hostname[/]", target.get('hostname', '-'))
     table.add_row("[bold cyan]Domain[/]", target.get('domain', '-'))
     table.add_row("[bold cyan]FQDN[/]", target.get('fqdn', '-'))
-    table.add_row("[bold cyan]OS[/]", target.get('os', 'Unknown'))
     console.print(table)
 
     creds = session.get_credentials()

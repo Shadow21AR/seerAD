@@ -1,18 +1,15 @@
-import typer
-import shutil
-import subprocess
+import typer, os, shutil, subprocess
+from pathlib import Path
 from typing import Optional, List
 from rich.console import Console
 from rich.table import Table, box
+
 from seerAD.core.session import session
 from seerAD.config import LOOT_DIR
-from pathlib import Path
-import os
-from seerAD.core.utils import get_faketime_string
+import seerAD.core.utils as utils
 
 console = Console()
 creds_app = typer.Typer(help="Credential management commands")
-fetch_app = typer.Typer(help="Fetch derived artifacts like tickets, certs, etc.")
 
 def display_credentials(creds: List[dict]):
     if not creds:
@@ -24,10 +21,10 @@ def display_credentials(creds: List[dict]):
     table.add_column("Domain", style="cyan")
     table.add_column("Password", style="cyan")
     table.add_column("NTLM", style="cyan")
-    table.add_column("AES", style="cyan")
+    table.add_column("AES-128", style="cyan")
+    table.add_column("AES-256", style="cyan")
     table.add_column("Ticket", style="cyan")
     table.add_column("Cert", style="cyan")
-    table.add_column("Token", style="cyan")
     table.add_column("Notes", style="cyan")
 
     for cred in creds:
@@ -36,59 +33,14 @@ def display_credentials(creds: List[dict]):
             f'[green]{cred.get("domain") or (session.current_target.get("domain", "N/A") if session.current_target else "N/A")}[/]',
             "✔" if cred.get("password") else "✘",
             "✔" if cred.get("ntlm") else "✘",
-            "✔" if cred.get("aes") else "✘",
+            "✔" if cred.get("aes128") else "✘",
+            "✔" if cred.get("aes256") else "✘",
             "✔" if cred.get("ticket") else "✘",
             "✔" if cred.get("cert") else "✘",
-            "✔" if cred.get("token") else "✘",
             (str(cred.get("notes") or "")[:20] + "...") if len(str(cred.get("notes") or "")) > 20 else str(cred.get("notes") or "")
         )
 
     console.print(table)
-
-def run_gettgt(domain, username, password=None, ntlm=None, dc_ip=None):
-    if not shutil.which("getTGT.py"):
-        console.print("→ Install Impacket and ensure it's accessible: [bold green]pipx install impacket[/]")
-        return False, "getTGT.py not found in PATH"
-
-    faketime_str = get_faketime_string(dc_ip) if dc_ip else None
-    if not faketime_str:
-        return False, f"Unable to fetch time from {dc_ip} for faketime"
-
-    temp_ccache = f"/tmp/{username}_ccache"
-    env = os.environ.copy()
-    env["KRB5CCNAME"] = temp_ccache
-    user_spec = f"{domain}/{username}"
-    cmd = ["faketime", faketime_str, "getTGT.py"]
-
-    if password:
-        user_spec += f":{password}"
-    elif ntlm:
-        cmd += ["-hashes", f":{ntlm}"]
-    else:
-        return False, "No password or NTLM hash provided"
-
-    cmd += [user_spec]
-
-    if dc_ip:
-        cmd += ["-dc-ip", dc_ip]
-
-    try:
-        result = subprocess.run(cmd, check=True, capture_output=True, env=env)
-
-        if Path(temp_ccache).exists():
-            label = session.current_target_label
-            out_dir = LOOT_DIR / label / "tickets"
-            out_dir.mkdir(parents=True, exist_ok=True)
-
-            final_path = out_dir / f"{username}.ccache"
-            shutil.move(temp_ccache, final_path)
-
-            return True, str(final_path)
-        else:
-            return False, f"Expected ticket at {temp_ccache} not found"
-
-    except subprocess.CalledProcessError as e:
-        return False, e.stderr.decode() if e.stderr else str(e)
 
 @creds_app.command("add")
 def creds_add(
@@ -96,10 +48,10 @@ def creds_add(
     domain: Optional[str] = typer.Option(None, "--domain", "-d"),
     password: Optional[str] = typer.Option(None, "--password", "-p"),
     ntlm: Optional[str] = typer.Option(None, "--ntlm", "-n"),
-    aes: Optional[str] = typer.Option(None, "--aes"),
+    aes128: Optional[str] = typer.Option(None, "--aes128"),
+    aes256: Optional[str] = typer.Option(None, "--aes256"),
     ticket: Optional[str] = typer.Option(None, "--ticket"),
     cert: Optional[str] = typer.Option(None, "--cert"),
-    token: Optional[str] = typer.Option(None, "--token"),
     notes: Optional[str] = typer.Option("", "--notes", "-N"),
 ):
     """Add a new credential to the current target."""
@@ -107,7 +59,7 @@ def creds_add(
         console.print("[red]No active target. Use 'target switch' first.[/]")
         return
 
-    if not any([password, ntlm, aes, ticket, cert, token]):
+    if not any([password, ntlm, aes128, aes256, ticket, cert]):
         console.print("[red]Provide at least one credential secret (password, hash, ticket, etc.)[/]")
         return
 
@@ -122,10 +74,10 @@ def creds_add(
         domain=domain,
         password=password,
         ntlm=ntlm,
-        aes=aes,
+        aes128=aes128,
+        aes256=aes256,
         ticket=ticket,
         cert=cert,
-        token=token,
         notes=notes
     )
 
@@ -133,6 +85,10 @@ def creds_add(
         console.print(f"[green]✔ Credential added for:[/] {username}")
     else:
         console.print(f"[red]✘ Failed to add credential for:[/] {username}")
+    
+    if not session.current_credential:
+        session.use_credential(username)
+        console.print(f"[green]✔ Selected credential:[/] {username}")
 
 @creds_app.command("list")
 def creds_list():
@@ -156,7 +112,9 @@ def creds_info():
 
     table = Table(box=box.ROUNDED, show_header=False)
     for k, v in cred.items():
-        table.add_row(f"[cyan]{k}[/]", str(v) if v else "-")
+        if k == 'domain':
+            v = v or session.current_target.get("domain", "N/A")
+        table.add_row(f"[cyan]{k}[/]", f"[green]{str(v)}[/]" if v else "[red]-[/]")
 
     console.print(f"\n[bold]Current credential for target [cyan]{session.current_target_label}[/][/]")
     console.print(table)
@@ -177,7 +135,7 @@ def creds_use(
 
 @creds_app.command("set")
 def creds_set(
-    field: str = typer.Argument(..., help="Field to update (password, ntlm, aes, domain, notes, etc.)"),
+    field: str = typer.Argument(..., help="Field to update (password, ntlm, aes128, aes256, ticket, cert, domain, notes, etc.)"),
     value: str = typer.Argument(..., help="New value (use '' to clear field)"),
 ):
     if not session.current_target_label:
@@ -190,8 +148,8 @@ def creds_set(
         return
 
     field = field.lower()
-    if field not in {"password", "ntlm", "aes", "ticket", "cert", "token", "domain", "notes"}:
-        console.print("[red]Invalid field. Allowed: password, ntlm, aes, ticket, cert, token, domain, notes[/]")
+    if field not in {"password", "ntlm", "aes128", "aes256", "ticket", "cert", "domain", "notes"}:
+        console.print("[red]Invalid field. Allowed: password, ntlm, aes128, aes256, ticket, cert, domain, notes[/]")
         return
 
     clean_value = None if value.strip() == "" else value
@@ -229,41 +187,81 @@ def creds_del(
     else:
         console.print("[red]✘ Failed to delete credential[/]")
 
-@fetch_app.command("ticket")
-def fetch_ticket():
+@creds_app.command("fetch")
+def fetch_creds():
     target = session.current_target
     cred = session.current_credential
 
-    if not target or not cred:
-        console.print("[red]No active target or selected credential.[/]")
+    if not target:
+        console.print("[red]No active target.[/]")
+        return
+    
+    if not cred:
+        console.print("[yellow]No credential selected. Use 'creds use' first.[/]")
         return
 
     username = cred.get("username")
     domain = cred.get("domain") or target.get("domain")
     password = cred.get("password")
     ntlm = cred.get("ntlm")
+    aes128 = cred.get("aes128")
+    aes256 = cred.get("aes256")
+    ticket = cred.get("ticket")
+    cert = cred.get("cert")
 
     if not username or not domain:
         console.print("[red]Missing username or domain.[/]")
         return
 
-    if not password and not ntlm:
-        console.print("[red]Credential must have either password or NTLM hash.[/]")
-        return
+    # Fetch NTLM from password if missing
+    if password and not ntlm:
+        console.print("[blue]→ Deriving NTLM from password...[/]")
+        derived_ntlm = utils.derive_ntlm(password)
+        session.update_credential(session.current_target_label, username, ntlm=derived_ntlm)
+        console.print(f"[green]✔ NTLM:[/] {derived_ntlm}")
 
-    label = session.current_target_label
-    out_dir = LOOT_DIR / label / "tickets"
-    out_dir.mkdir(parents=True, exist_ok=True)
-    ticket_path = out_dir / f"{username}.ccache"
+    # Fetch AES keys if missing
+    if password and not aes128 and not aes256:
+        console.print("[blue]→ Deriving AES keys from password...[/]")
+        aes128, aes256 = utils.derive_aes(password, domain, username)
+        session.update_credential(session.current_target_label, username, aes128=aes128, aes256=aes256)
+        console.print(f"[green]✔ AES-128:[/] {aes128}")
+        console.print(f"[green]✔ AES-256:[/] {aes256}")
 
-    success, err = run_gettgt(domain, username, password, ntlm, target.get("ip"))
-    if not success:
-        console.print(f"[red]Ticket fetch failed:[/] {err}")
-        return
+    # Fetch Ticket if not present and we have any usable secret
+    if not ticket:
+        if password:
+            console.print("[blue]→ Fetching ticket using password...[/]")
+            success, result = utils.run_gettgt(domain, username, password=password, dc_ip=target.get("ip"))
+        elif ntlm:
+            console.print("[blue]→ Fetching ticket using NTLM hash...[/]")
+            success, result = utils.run_gettgt(domain, username, ntlm=ntlm, dc_ip=target.get("ip"))
+        elif aes128 or aes256:
+            console.print("[blue]→ Fetching ticket using AES key...[/]")
+            success, result = utils.run_gettgt(domain, username, aes128=aes128, aes256=aes256, dc_ip=target.get("ip"))
+        elif cert:
+            console.print("[blue]→ Fetching ticket using certificate...[/]")
+            success, result = utils.run_cert_fetch(domain, username, cert, dc_ip=target.get("ip"))
+        else:
+            success, result = False, "No usable secret found to fetch ticket"
 
-    session.update_credential(label, username, ticket=str(ticket_path))
-    console.print(f"[green]✔ Ticket saved:[/] {ticket_path}")
-    console.print(f"[green]✔ Credential updated with ticket path[/]")
+        if success:
+            result_path = Path(result)
+            cwd_path = Path.cwd() / result_path.name
 
-creds_app.add_typer(fetch_app, name="fetch")
+            try:
+                shutil.copy(result_path, cwd_path)
+                session.update_credential(session.current_target_label, username, ticket=str(result_path))
+                console.print(f"[green]✔ Ticket saved:[/] {result_path}")
+                console.print(f"[green]✔ Credential updated with ticket path[/]")
+                console.print(f"[green]✔ Ticket also copied to:[/] {cwd_path}")
+
+                if result_path.exists():
+                    os.environ["KRB5CCNAME"] = str(result_path)
+                    console.print(f"[✔] KRB5CCNAME set to: {result_path}")
+            except Exception as e:
+                console.print(f"[red]✘ Failed to copy or update credential:[/] {e}")
+        else:
+            console.print(f"[red]Ticket fetch failed:[/] {result}")
+ 
 app = creds_app
