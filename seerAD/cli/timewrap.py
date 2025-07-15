@@ -83,8 +83,8 @@ def set_time(dc_ip: Optional[str] = typer.Argument(None, help="DC IP to sync tim
         dc_ip = session.current_target.get("ip")
 
     if TIMEWRAP_FILE.exists():
-        console.print("[yellow]Timewrap already set. Reset before setting again.[/]")
-        return
+        console.print("[yellow]Timewrap already set. Resetting it.[/]")
+        reset_timewrap_config()        
 
     console.print(f"[blue]Fetching time from DC {dc_ip}...[/]")
     faketime_str = get_faketime_string(dc_ip)
