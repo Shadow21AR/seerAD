@@ -75,12 +75,12 @@ def set_time(dc_ip: Optional[str] = typer.Argument(None, help="DC IP to sync tim
     """
     Set system time skew based on target DC IP.
     """
-    if not dc_ip:
-        dc_ip = session.current_target.get("ip")
+    if not session.current_target_label:
+        console.print("[red]No active target.[/]")
+        return
 
     if not dc_ip:
-        console.print("[red]No DC IP provided or active target.[/]")
-        return
+        dc_ip = session.current_target.get("ip")
 
     if TIMEWRAP_FILE.exists():
         console.print("[yellow]Timewrap already set. Reset before setting again.[/]")

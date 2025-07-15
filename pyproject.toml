@@ -3,6 +3,7 @@ name = "seerAD"
 version = "0.1.0"
 description = "SeerAD - Semi-automated AD CTF Assistant"
 authors = [{name = "sado"}]
+license = {text = "MIT"}
 dependencies = [
     "typer>=0.4.3",
     "rich>=13.0.0",

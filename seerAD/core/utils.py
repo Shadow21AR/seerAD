@@ -154,7 +154,6 @@ def run_cert_fetch(domain, username, cert_path, key_path=None, dc_ip=None):
 
             target = KerberosTarget()
             target.domain = domain
-            target.hostname = domain
             target.endpoint_ip = dc_ip
             client = AIOKerberosClient(cred, target)
             await client.get_TGT()

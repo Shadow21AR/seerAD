@@ -115,7 +115,6 @@ class SeerCompleter(Completer):
                 "switch": self.get_target_labels,
                 "set": {
                     "ip": {},
-                    "hostname": {},
                     "domain": {},
                     "fqdn": {},
                     "os": {},
