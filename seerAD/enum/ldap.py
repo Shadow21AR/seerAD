@@ -30,20 +30,19 @@ def build_auth(method: str, cred: dict) -> Tuple[List[str], Dict[str, str]]:
 
 def run(method: str, extra_args: List[str]):
     if not session.current_target_label:
-        console.print("[red]No active target.[/]")
+        console.print("[red]No active target set.[/]")
         return
 
     target = session.current_target
     cred = session.current_credential
     ip = target.get("ip")
     fqdn = target.get("fqdn") or target.get("hostname") or ip
-
     if not ip:
-        console.print("[red]No IP set for current target.[/]")
+        console.print("[red]Target IP not set.[/]")
         return
 
     if not cred and method != "anon":
-        console.print("[yellow]No credential selected. Use 'creds use' or use 'anon'.[/]")
+        console.print("[yellow]No credential selected. Use 'creds use' or use 'anon' mode.[/]")
         return
 
     try:
@@ -51,7 +50,7 @@ def run(method: str, extra_args: List[str]):
         auth_args, env_vars = build_auth(method, cred or {})
         cmd = ["nxc", "ldap", target_host] + auth_args + extra_args
 
-        console.print(f"[dim]Running Command:[/] [yellow]{' '.join(cmd)}[/]")
+        console.print(f"[dim]Running Command:[/] [yellow]{ ' '.join(cmd) }[/]")
 
         env = os.environ.copy()
         env.update(env_vars)
