@@ -139,7 +139,10 @@ class SeerCompleter(Completer):
                 },
                 "fetch": {},
             },
-            "enum": {},
+            "enum": {
+                "run": {},
+                "list": {},
+            },
             "abuse": {},
             "tasks": {},
             "timewrap": {
