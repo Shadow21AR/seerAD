@@ -25,18 +25,18 @@ def print_target_table(targets: dict, current_label: str = None) -> None:
 
     table = Table(show_header=True, header_style="bold magenta")
     for col in ["Label", "IP", "Hostname", "Domain", "FQDN", "OS"]:
-        table.add_column(col, style="green")
+        table.add_column(col, style="cyan")
 
     for label, target in targets.items():
         t = target.to_dict() if hasattr(target, "to_dict") else target
         is_current = label == current_label
         row = [
-            f"[bold cyan]{label}[/]" if is_current else label,
-            f"[bold cyan]{t.get('ip') or '-'}[/]" if is_current else t.get('ip') or "-",
-            f"[bold cyan]{t.get('hostname') or '-'}[/]" if is_current else t.get('hostname') or "-",
-            f"[bold cyan]{t.get('domain') or '-'}[/]" if is_current else t.get('domain') or "-",
-            f"[bold cyan]{t.get('fqdn') or '-'}[/]" if is_current else t.get('fqdn') or "-",
-            f"[bold cyan]{t.get('os') or '-'}[/]" if is_current else t.get('os') or "-",
+            f"[bold green]{label}*[/]" if is_current else label,
+            f"[bold green]{t.get('ip') or '-'}[/]" if is_current else t.get('ip') or "-",
+            f"[bold green]{t.get('hostname') or '-'}[/]" if is_current else t.get('hostname') or "-",
+            f"[bold green]{t.get('domain') or '-'}[/]" if is_current else t.get('domain') or "-",
+            f"[bold green]{t.get('fqdn') or '-'}[/]" if is_current else t.get('fqdn') or "-",
+            f"[bold green]{t.get('os') or '-'}[/]" if is_current else t.get('os') or "-",
         ]
         table.add_row(*row)
 

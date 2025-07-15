@@ -1,6 +1,7 @@
 from pathlib import Path
 from typing import Dict, Optional, Any, List
 import json
+import os
 from seerAD.config import LOOT_DIR, DATA_DIR
 from . import creds
 from .target import Target, TargetManager
@@ -17,6 +18,9 @@ class Session:
     def _ensure_workspace(self):
         LOOT_DIR.mkdir(parents=True, exist_ok=True)
         DATA_DIR.mkdir(parents=True, exist_ok=True)
+        local_bin = os.path.expanduser("~/.local/bin")
+        if local_bin not in os.environ.get("PATH", ""):
+            os.environ["PATH"] = f"{local_bin}:{os.environ['PATH']}"
 
     def reset(self):
         self.target_manager = TargetManager(self.session_file)

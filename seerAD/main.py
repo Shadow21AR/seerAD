@@ -123,7 +123,7 @@ class SeerCompleter(Completer):
                 "list": {},
                 "use": self.get_cred_users,
                 "del": self.get_cred_users,
-                "show": self.get_cred_users,
+                "info": self.get_cred_users,
                 "set": {
                     "password": {},
                     "ntlm_hash": {},
@@ -131,6 +131,9 @@ class SeerCompleter(Completer):
                     "ticket": {},
                     "certificate": {},
                     "notes": {},
+                },
+                "fetch": {
+                    "ticket": {},
                 },
             },
             "enum": {},

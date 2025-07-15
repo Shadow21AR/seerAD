@@ -1,11 +1,18 @@
 import typer
+import shutil
+import subprocess
 from typing import Optional, List
 from rich.console import Console
 from rich.table import Table, box
 from seerAD.core.session import session
+from seerAD.config import LOOT_DIR
+from pathlib import Path
+import os
+from seerAD.core.utils import get_faketime_string
 
 console = Console()
 creds_app = typer.Typer(help="Credential management commands")
+fetch_app = typer.Typer(help="Fetch derived artifacts like tickets, certs, etc.")
 
 def display_credentials(creds: List[dict]):
     if not creds:
@@ -29,14 +36,59 @@ def display_credentials(creds: List[dict]):
             f'[green]{cred.get("domain") or (session.current_target.get("domain", "N/A") if session.current_target else "N/A")}[/]',
             "✔" if cred.get("password") else "✘",
             "✔" if cred.get("ntlm") else "✘",
-            "✔"  if cred.get("aes") else "✘",
+            "✔" if cred.get("aes") else "✘",
             "✔" if cred.get("ticket") else "✘",
             "✔" if cred.get("cert") else "✘",
-            "✔" * 8 if cred.get("token") else "✘",
+            "✔" if cred.get("token") else "✘",
             (str(cred.get("notes") or "")[:20] + "...") if len(str(cred.get("notes") or "")) > 20 else str(cred.get("notes") or "")
         )
 
     console.print(table)
+
+def run_gettgt(domain, username, password=None, ntlm=None, dc_ip=None):
+    if not shutil.which("getTGT.py"):
+        console.print("→ Install Impacket and ensure it's accessible: [bold green]pipx install impacket[/]")
+        return False, "getTGT.py not found in PATH"
+
+    faketime_str = get_faketime_string(dc_ip) if dc_ip else None
+    if not faketime_str:
+        return False, f"Unable to fetch time from {dc_ip} for faketime"
+
+    temp_ccache = f"/tmp/{username}_ccache"
+    env = os.environ.copy()
+    env["KRB5CCNAME"] = temp_ccache
+    user_spec = f"{domain}/{username}"
+    cmd = ["faketime", faketime_str, "getTGT.py"]
+
+    if password:
+        user_spec += f":{password}"
+    elif ntlm:
+        cmd += ["-hashes", f":{ntlm}"]
+    else:
+        return False, "No password or NTLM hash provided"
+
+    cmd += [user_spec]
+
+    if dc_ip:
+        cmd += ["-dc-ip", dc_ip]
+
+    try:
+        result = subprocess.run(cmd, check=True, capture_output=True, env=env)
+
+        if Path(temp_ccache).exists():
+            label = session.current_target_label
+            out_dir = LOOT_DIR / label / "tickets"
+            out_dir.mkdir(parents=True, exist_ok=True)
+
+            final_path = out_dir / f"{username}.ccache"
+            shutil.move(temp_ccache, final_path)
+
+            return True, str(final_path)
+        else:
+            return False, f"Expected ticket at {temp_ccache} not found"
+
+    except subprocess.CalledProcessError as e:
+        return False, e.stderr.decode() if e.stderr else str(e)
 
 @creds_app.command("add")
 def creds_add(
@@ -91,8 +143,8 @@ def creds_list():
     creds = session.get_credentials()
     display_credentials(creds)
 
-@creds_app.command("show")
-def creds_show():
+@creds_app.command("info")
+def creds_info():
     if not session.current_target_label:
         console.print("[red]No active target.[/]")
         return
@@ -177,4 +229,41 @@ def creds_del(
     else:
         console.print("[red]✘ Failed to delete credential[/]")
 
+@fetch_app.command("ticket")
+def fetch_ticket():
+    target = session.current_target
+    cred = session.current_credential
+
+    if not target or not cred:
+        console.print("[red]No active target or selected credential.[/]")
+        return
+
+    username = cred.get("username")
+    domain = cred.get("domain") or target.get("domain")
+    password = cred.get("password")
+    ntlm = cred.get("ntlm")
+
+    if not username or not domain:
+        console.print("[red]Missing username or domain.[/]")
+        return
+
+    if not password and not ntlm:
+        console.print("[red]Credential must have either password or NTLM hash.[/]")
+        return
+
+    label = session.current_target_label
+    out_dir = LOOT_DIR / label / "tickets"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    ticket_path = out_dir / f"{username}.ccache"
+
+    success, err = run_gettgt(domain, username, password, ntlm, target.get("ip"))
+    if not success:
+        console.print(f"[red]Ticket fetch failed:[/] {err}")
+        return
+
+    session.update_credential(label, username, ticket=str(ticket_path))
+    console.print(f"[green]✔ Ticket saved:[/] {ticket_path}")
+    console.print(f"[green]✔ Credential updated with ticket path[/]")
+
+creds_app.add_typer(fetch_app, name="fetch")
 app = creds_app
