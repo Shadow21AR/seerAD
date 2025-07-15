@@ -5,7 +5,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 from rich.console import Console
-from seerAD.config import ROOT_DIR
+from seerAD.config import LOOT_DIR
 from seerAD.core.utils import get_faketime_string
 from seerAD.core.session import session
 from typing import Optional
@@ -13,7 +13,7 @@ from typing import Optional
 console = Console()
 timewrap_app = typer.Typer(help="Time synchronization for Kerberos operations")
 
-TIMEWRAP_FILE = ROOT_DIR / "timewrap.json"
+TIMEWRAP_FILE = LOOT_DIR / "timewrap.json"
 
 
 def save_timewrap_config(dc_ip: str, faketime: str):

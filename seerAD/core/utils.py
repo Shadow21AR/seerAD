@@ -110,7 +110,7 @@ def run_gettgt(domain, username, password=None, ntlm=None, aes256=None, dc_ip=No
             kerberos_url = f"{proto}://{domain}\\{quote_plus(username)}:{secret}@{dc_ip}"
             console.print(f"[cyan]→ Using kerberos_url:[/] {kerberos_url}")
 
-            TIMEWRAP_FILE = ROOT_DIR / "timewrap.json"
+            TIMEWRAP_FILE = LOOT_DIR / "timewrap.json"
             if not TIMEWRAP_FILE.exists():
                 console.print("[yellow]ℹ Timewrap not set. Please set it first using 'timewrap set'[/]")
                 return False, "Timewrap not set"

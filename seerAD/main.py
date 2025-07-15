@@ -20,9 +20,9 @@ from rich.console import Console
 
 # Local application imports
 from seerAD.cli.main import app as typer_app
-from seerAD.config import DATA_DIR, ROOT_DIR
+from seerAD.config import DATA_DIR, LOOT_DIR
 
-TIMEWRAP_FILE = ROOT_DIR / "timewrap.json"
+TIMEWRAP_FILE = LOOT_DIR / "timewrap.json"
 
 class LimitedFileHistory(BaseFileHistory):
     """File history that limits the number of entries to prevent the history file from growing too large."""
