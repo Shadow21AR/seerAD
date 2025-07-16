@@ -21,7 +21,6 @@ from rich.console import Console
 # Local application imports
 from seerAD.cli.main import app as typer_app
 from seerAD.config import DATA_DIR, LOOT_DIR
-from seerAD.enum import get_enum_module, load_enum_modules
 
 TIMEWRAP_FILE = LOOT_DIR / "timewrap.json"
 
@@ -105,7 +104,6 @@ class SeerCompleter(Completer):
             get_cwd_func: Function that returns the current working directory
         """
         self.get_cwd = get_cwd_func
-        load_enum_modules()
         self.shell_builtins = ["cd", "ls", "pwd"]
         self.commands = {
             "version": {},
@@ -142,7 +140,17 @@ class SeerCompleter(Completer):
                 "fetch": {},
             },
             "enum": {
-                "run": {},
+                "run": {
+                    "smb": {},
+                    "ldap": {},
+                    "winrm": {},
+                    "ssh": {},
+                    "rdp": {},
+                    "nfs": {},
+                    "vnc": {},
+                    "wmi": {},
+                    "kerberoast": {},
+                },
                 "list": {},
             },
             "abuse": {},
@@ -248,19 +256,6 @@ class SeerCompleter(Completer):
         if document.cursor_position > 0 and not document.text_before_cursor[-1].isspace():
             is_completing_word = True
             current_word = words[-1] if words else ""
-
-        # Handle enum modules specially
-        if len(words) >= 2 and words[0] == "enum" and words[1] == "run":
-            if is_completing_word:
-                try:
-                    modules = list(get_enum_module.__globals__['ENUM_MODULES'].keys())
-                    for module in modules:
-                        if module.startswith(current_word):
-                            yield Completion(module, start_position=-len(current_word))
-                    return
-                except Exception as e:
-                    console.print(f"[yellow][!] Error getting enum modules: {e}[/]")
-                return
 
         if not words:
             for cmd in self.commands:
@@ -602,7 +597,6 @@ if os.getenv("SEERAD_FAKE_STARTED") != "1":
                 env["SEERAD_FAKE_STARTED"] = "1"
                 env["LD_PRELOAD"] = "/usr/lib/x86_64-linux-gnu/faketime/libfaketime.so.1"
 
-                console.print(f"[+] Restarting with faketime: {faketime}")
                 os.execve(sys.executable, [sys.executable, "-m", "seerAD.main"], env)
         except Exception as e:
             console.print(f"[!] Failed to apply faketime restart: {e}")

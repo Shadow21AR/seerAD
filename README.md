@@ -54,6 +54,9 @@ seerAD version
 
 - Python 3.8 or higher
 - pipx (recommended for installation)
+- nxc (tool)
+- impacket (tool)
+- bloodyAD (tool)
 
 ## Contributing
 
