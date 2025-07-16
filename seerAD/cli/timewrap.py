@@ -2,7 +2,6 @@ import typer
 import json
 import os
 import sys
-import shutil
 from datetime import datetime
 from pathlib import Path
 from rich.console import Console
@@ -32,44 +31,6 @@ def reset_timewrap_config():
         TIMEWRAP_FILE.unlink()
 
 
-import shutil
-
-def restart_seerad(with_faketime: bool = False):
-    """
-    Restart SeerAD with or without faketime env.
-    """
-    env = os.environ.copy()
-
-    if with_faketime and TIMEWRAP_FILE.exists():
-        try:
-            with open(TIMEWRAP_FILE, "r") as f:
-                data = json.load(f)
-                faketime = data.get("faketime")
-                if faketime:
-                    env["FAKETIME"] = faketime
-                    env["SEERAD_FAKE_STARTED"] = "1"
-                    libfaketime = "/usr/lib/x86_64-linux-gnu/faketime/libfaketime.so.1"
-                    if not Path(libfaketime).exists():
-                        console.print("[red]libfaketime not found! Make sure it's installed.[/]")
-                        return
-                    env["LD_PRELOAD"] = libfaketime
-        except Exception as e:
-            console.print(f"[red]✘ Failed to load faketime:[/] {e}")
-            return
-    else:
-        env.pop("FAKETIME", None)
-        env.pop("SEERAD_FAKE_STARTED", None)
-        env.pop("LD_PRELOAD", None)
-
-    seerad_bin = shutil.which("seerAD")
-    if not seerad_bin:
-        console.print("[red]✘ Could not find 'seerAD' in PATH.[/]")
-        return
-
-    console.print("[cyan]Restarting SeerAD...[/]")
-    os.execvpe(seerad_bin, [seerad_bin], env)
-
-
 @timewrap_app.command("set")
 def set_time(dc_ip: Optional[str] = typer.Argument(None, help="DC IP to sync time from")):
     """
@@ -83,8 +44,7 @@ def set_time(dc_ip: Optional[str] = typer.Argument(None, help="DC IP to sync tim
         dc_ip = session.current_target.get("ip")
 
     if TIMEWRAP_FILE.exists():
-        console.print("[yellow]Timewrap already set. Resetting it.[/]")
-        reset_timewrap_config()        
+        console.print("[yellow]Timewrap already set. Updating it.[/]")
 
     console.print(f"[blue]Fetching time from DC {dc_ip}...[/]")
     faketime_str = get_faketime_string(dc_ip)
@@ -94,21 +54,18 @@ def set_time(dc_ip: Optional[str] = typer.Argument(None, help="DC IP to sync tim
 
     save_timewrap_config(dc_ip, faketime_str)
     console.print(f"[green]✔ Timewrap set:[/] {faketime_str}")
-    restart_seerad(with_faketime=True)
 
 
 @timewrap_app.command("reset")
 def reset_time():
     """
-    Reset time skew override and return to system time.
+    Reset timewrap to use system time.
     """
     if TIMEWRAP_FILE.exists():
         reset_timewrap_config()
-        console.print("[green]✔ Timewrap reset. Returning to system time.[/]")
+        console.print("[green]✔ Timewrap reset to use system time[/]")
     else:
-        console.print("[blue]No active timewrap to reset.[/]")
-
-    restart_seerad(with_faketime=False)
+        console.print("[yellow]No timewrap is currently set[/]")
 
 
 @timewrap_app.command("status")
@@ -119,9 +76,12 @@ def status():
     if TIMEWRAP_FILE.exists():
         with open(TIMEWRAP_FILE, "r") as f:
             data = json.load(f)
-            console.print(f"[green]Timewrap active:[/] {data['faketime']} (set at {data['set_at']})")
+            console.print("[green]Timewrap is active:[/]")
+            console.print(f"  DC IP: {data.get('dc_ip')}")
+            console.print(f"  Fake time: {data.get('faketime')}")
+            console.print(f"  Set at: {data.get('set_at')}")
     else:
-        console.print("[blue]No active timewrap.[/]")
+        console.print("[yellow]No timewrap is currently set[/]")
 
 
 app = timewrap_app

@@ -56,6 +56,7 @@ class LimitedFileHistory(BaseFileHistory):
         super().append(string)
         self._trim_history()
 
+
 # Rich console theme for consistent styling
 class SeerTheme:
     SUCCESS = "green"
@@ -345,8 +346,25 @@ def run_seer_command(args: List[str]) -> None:
     Args:
         args: List of command line arguments
     """
+    # Check for timewrap
+    timewrap_file = LOOT_DIR / "timewrap.json"
+    
+    if timewrap_file.exists():
+        try:
+            with open(timewrap_file) as f:
+                timewrap_data = json.load(f)
+                faketime = timewrap_data.get("faketime")
+                if faketime:
+                    # Set environment variables for the current process
+                    os.environ["FAKETIME"] = faketime
+                    os.environ["LD_PRELOAD"] = "/usr/lib/x86_64-linux-gnu/faketime/libfaketime.so.1"
+        except Exception as e:
+            console.print(f"[yellow]Warning: Failed to apply timewrap: {e}[/]")
+    
     try:
+        # Always use typer_app with the modified environment
         typer_app(prog_name="seerAD", args=args)
+            
     except SystemExit as e:
         if e.code != 0 and args:  # Only show error if args is not empty
             console.print(f"[red][!] Error: Unknown or invalid command '{args[0]}'[/]")
@@ -584,24 +602,6 @@ def run_interactive() -> None:
             console.print(f"[{THEME.INFO}]Type 'exit' or press Ctrl+D to quit.[/]")
             continue
 
-# Only trigger restart if we're not already in faketime mode
-if os.getenv("SEERAD_FAKE_STARTED") != "1":
-    if TIMEWRAP_FILE.exists():
-        try:
-            with open(TIMEWRAP_FILE) as f:
-                data = json.load(f)
-                faketime = data.get("faketime")
-
-            if faketime:
-                env = os.environ.copy()
-                env["FAKETIME"] = faketime
-                env["SEERAD_FAKE_STARTED"] = "1"
-                env["LD_PRELOAD"] = "/usr/lib/x86_64-linux-gnu/faketime/libfaketime.so.1"
-
-                os.execve(sys.executable, [sys.executable, "-m", "seerAD.main"], env)
-        except Exception as e:
-            console.print(f"[!] Failed to apply faketime restart: {e}")
-
 # Entry point function
 def main() -> None:
     try:
@@ -617,7 +617,6 @@ def main() -> None:
         if os.getenv("SEER_DEBUG"):
             console.print_exception()
         sys.exit(1)
-
 
 if __name__ == "__main__":
     main()
