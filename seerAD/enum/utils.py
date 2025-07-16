@@ -8,7 +8,7 @@ from seerAD.core.session import session
 
 console = Console()
 
-def build_auth_args(method: str, cred: dict) -> Tuple[List[str], Dict[str, str]]:
+def build_auth_args_nxc(method: str, cred: dict) -> Tuple[List[str], Dict[str, str]]:
     if method == "ticket":
         ticket = cred.get("ticket")
         if not ticket:
@@ -49,7 +49,7 @@ def run_nxc(tool: str, method: str, extra_args: List[str]):
 
     try:
         target = build_target_host(method)
-        auth_args, env_vars = build_auth_args(method, session.current_credential or {})
+        auth_args, env_vars = build_auth_args_nxc(method, session.current_credential or {})
         cmd = ["nxc", tool, target] + auth_args + extra_args
 
         console.print(f"[dim]Running Command:[/] [yellow]{' '.join(cmd)}[/]")
@@ -61,3 +61,68 @@ def run_nxc(tool: str, method: str, extra_args: List[str]):
 
     except Exception as e:
         console.print(f"[red]{tool.upper()} enum error: {e}[/]")
+
+def build_auth_args_impacket(method: str, cred: dict, domain: str) -> Tuple[List[str], Dict[str, str], str]:
+    env = {}
+    username = cred.get("username", "")
+    target = f"{domain}/{username}"
+
+    if method == "ticket":
+        ticket = cred.get("ticket")
+        if not ticket:
+            raise ValueError("No Kerberos ticket found.")
+        env["KRB5CCNAME"] = ticket
+        return ["-k", "-no-pass"], env, target
+
+    elif method == "password":
+        password = cred.get("password")
+        if not username or not password:
+            raise ValueError("Username and password required.")
+        return [], env, f"{domain}/{username}:{password}"
+
+    elif method == "hash":
+        ntlm = cred.get("ntlm")
+        if not username or not ntlm:
+            raise ValueError("Username and NTLM hash required.")
+        return ["-hashes", f":{ntlm}", "-no-pass"], env, target
+
+    elif method == "aes":
+        aes = cred.get("aes")
+        if not username or not aes:
+            raise ValueError("Username and AES key required.")
+        return ["-aesKey", aes, "-no-pass"], env, target
+
+    else:
+        raise ValueError(f"Unsupported auth method: {method}")
+
+
+def run_impacket(tool: str, method: str, extra_args: List[str]):
+    if not session.current_target_label:
+        console.print("[red]No target set.[/]")
+        return
+
+    if method != "anon" and not session.current_credential:
+        console.print("[yellow]No credential selected. Use 'creds use' or use 'anon'.[/]")
+        return
+
+    try:
+        target_obj = session.current_target
+        cred = session.current_credential or {}
+        domain = target_obj.get("domain", "")
+        ip = target_obj.get("ip", "")
+        script = f"{tool}.py"
+
+        auth_args, env_vars, target = build_auth_args_impacket(method, cred, domain)
+        fqdn = target_obj.get("fqdn") or target_obj.get("hostname") or domain
+        cmd = [script, target, "-dc-ip", ip, "-dc-host", fqdn] + auth_args + extra_args
+
+        env = os.environ.copy()
+        env.update(env_vars)
+        env["PYTHONWARNINGS"] = "ignore::UserWarning"
+
+        console.print(f"[dim]Running Command:[/] [yellow]{' '.join(cmd)}[/]")
+        result = subprocess.run(cmd, capture_output=True, text=True, env=env)
+        console.print(result.stdout.strip() + "\n" + result.stderr.strip())
+
+    except Exception as e:
+        console.print(f"[red]{tool.upper()} error: {e}[/]")
