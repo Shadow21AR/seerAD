@@ -1,4 +1,4 @@
-import subprocess, shutil, os, hashlib, asyncio, json
+import subprocess, shutil, os, hashlib, asyncio, json, re, time, datetime, ntplib
 from pathlib import Path
 from impacket.krb5.crypto import _enctype_table
 from impacket.krb5.types import Principal
@@ -6,6 +6,8 @@ from Crypto.Protocol.KDF import PBKDF2
 from Crypto.Hash import SHA1
 from urllib.parse import quote_plus
 from rich.console import Console
+from typing import Optional
+from datetime import timezone
 
 from minikerberos.common.creds import KerberosCredential
 from minikerberos.common.target import KerberosTarget
@@ -18,67 +20,70 @@ from seerAD.core.session import session
 
 console = Console()
 
-def get_faketime_string(dc_ip: str) -> str:
+def get_faketime_offset(target_ip: str) -> str:
+    """
+    Return the faketime offset string (e.g., '+3h') based on difference between local and DC time.
+    Tries ntpdate first, falls back to ntplib if ntpdate fails.
+    Returns "0" if both methods fail.
+    """
     try:
-        output = subprocess.check_output(["ntpdate", "-q", dc_ip], text=True, stderr=subprocess.DEVNULL)
-        for line in output.splitlines():
-            parts = line.strip().split()    
-            if len(parts) >= 2:
-                date_str, time_str = parts[0], parts[1]
-                return f"{date_str} {time_str}"
-        return None
+        # Try ntpdate first
+        try:
+            offset_sec = get_ntp_offset_ntpdate(target_ip)
+            if offset_sec is not None:
+                return format_offset_as_faketime(offset_sec)
+        except Exception as e:
+            console.print(f"[yellow]ntpdate failed: {e}[/]")
+        
+        # Fall back to ntplib
+        try:
+            console.print("[yellow]Falling back to ntplib...[/]")
+            offset_sec = get_ntp_offset_ntplib(target_ip)
+            if offset_sec is not None:
+                return format_offset_as_faketime(offset_sec)
+        except Exception as e:
+            console.print(f"[yellow]ntplib failed: {e}[/]")
+            
+        # If both methods failed
+        console.print("[yellow]Using system time as fallback[/]")
+        return "+0h"
+        
     except Exception as e:
-        return None
+        console.print(f"[red]Failed to calculate time offset: {e}[/]")
+        return "+0h"
 
-def run_gettgt(domain, username, password=None, ntlm=None, dc_ip=None):
-    if not shutil.which("getTGT.py"):
-        console.print("→ Install Impacket and ensure it's accessible: [bold green]pipx install impacket[/]")
-        return False, "getTGT.py not found in PATH"
+def format_offset_as_faketime(offset: float) -> str:
+    """
+    Converts float seconds offset to faketime string like '+7h59'
+    """
+    sign = '+' if offset >= 0 else '-'
+    abs_offset = abs(offset)
+    hours = int(abs_offset // 3600)
+    minutes = int((abs_offset % 3600) // 60)
+    return f"{sign}{hours}h{minutes:02d}"
 
-    faketime_str = get_faketime_string(dc_ip) if dc_ip else None
-    if not faketime_str:
-        return False, f"Unable to fetch time from {dc_ip} for faketime"
 
-    temp_ccache = f"{username}.ccache"
-    env = os.environ.copy()
-    env["KRB5CCNAME"] = temp_ccache
-    user_spec = f"{domain}/{username}"
-    cmd = ["faketime", faketime_str, "getTGT.py"]
+def get_ntp_offset_ntpdate(target_ip: str) -> float:
+    """
+    Uses `ntpdate -q` to get time offset with the target.
+    Returns offset in seconds (can be float).
+    """
+    import subprocess
 
-    if password:
-        user_spec += f":{password}"
-    elif ntlm:
-        cmd += ["-hashes", f":{ntlm}"]
-    else:
-        return False, "No password or NTLM hash provided"
+    result = subprocess.run(["ntpdate", "-q", target_ip], capture_output=True, text=True)
+    for line in result.stdout.splitlines():
+        if target_ip in line:
+            parts = line.strip().split()
+            return float(parts[3])
+    raise ValueError("Could not parse offset from ntpdate output")
 
-    cmd += [user_spec]
-
-    if dc_ip:
-        cmd += ["-dc-ip", dc_ip]
-
-    console.print(f"[cyan]→ Running:[/] {' '.join(cmd)}")
-    try:
-        result = subprocess.run(cmd, check=True, capture_output=True, env=env)
-
-        if Path(temp_ccache).exists():
-            label = session.current_target_label
-            out_dir = LOOT_DIR / label / "tickets"
-            out_dir.mkdir(parents=True, exist_ok=True)
-            final_path = out_dir / f"{username}.ccache"
-            shutil.move(temp_ccache, final_path)
-            return True, str(final_path)
-        else:
-            return False, f"Expected ticket at {temp_ccache} not found"
-
-    except subprocess.CalledProcessError as e:
-        err_out = e.stderr.decode() if e.stderr else str(e)
-        console.print(f"[red]✘ Command failed:[/]\n{err_out}")
-        return False, err_out
+def get_ntp_offset_ntplib(target_ip: str) -> float:
+    client = ntplib.NTPClient()
+    response = client.request(target_ip, version=3, timeout=3)
+    return response.offset
 
 def derive_ntlm(password):
     return hashlib.new('md4', password.encode('utf-16le')).hexdigest()
-
 
 def derive_aes(password, domain, username):
     salt = (domain.upper() + username).encode()
@@ -110,17 +115,6 @@ def run_gettgt(domain, username, password=None, ntlm=None, aes256=None, dc_ip=No
             kerberos_url = f"{proto}://{domain}\\{quote_plus(username)}:{secret}@{dc_ip}"
             console.print(f"[cyan]→ Using kerberos_url:[/] {kerberos_url}")
 
-            TIMEWRAP_FILE = LOOT_DIR / "timewrap.json"
-            if not TIMEWRAP_FILE.exists():
-                console.print("[yellow]ℹ Timewrap not set. Please set it first using 'timewrap set'[/]")
-                return False, "Timewrap not set"
-
-            with open(TIMEWRAP_FILE, "r") as f:
-                timewrap = json.load(f)
-                if timewrap.get("dc_ip") != dc_ip:
-                    console.print("[yellow]ℹ DC IP in timewrap does not match target DC IP. Please set it first using 'timewrap set'[/]")
-                    return False, "DC IP in timewrap does not match target DC IP"
-
             # Create Kerberos client and fetch ticket
             cf = KerberosClientFactory.from_url(kerberos_url)
             client = cf.get_client()
@@ -142,31 +136,4 @@ def run_gettgt(domain, username, password=None, ntlm=None, aes256=None, dc_ip=No
 
 
 def run_cert_fetch(domain, username, cert_path, key_path=None, dc_ip=None):
-    async def do_fetch():
-        try:
-            principal = f"{username}@{domain.upper()}"
-
-            cred = KerberosCredential(
-                principal,
-                certificate=cert_path,
-                key=key_path
-            )
-
-            target = KerberosTarget()
-            target.domain = domain
-            target.endpoint_ip = dc_ip
-            client = AIOKerberosClient(cred, target)
-            await client.get_TGT()
-
-            label = session.current_target_label
-            out_dir = LOOT_DIR / label / "tickets"
-            out_dir.mkdir(parents=True, exist_ok=True)
-            final_path = out_dir / f"{username}.ccache"
-            client.ccache.to_file(str(final_path))
-            return True, str(final_path)
-        except KerberosError as e:
-            return False, f"Kerberos error: {e}"
-        except Exception as e:
-            return False, str(e)
-
-    return asyncio.run(do_fetch())
+    return "Not implemented yet"

@@ -17,12 +17,22 @@ from prompt_toolkit.document import Document
 from prompt_toolkit.history import FileHistory as BaseFileHistory
 from prompt_toolkit.styles import Style
 from rich.console import Console
+from datetime import datetime, timedelta
 
 # Local application imports
 from seerAD.cli.main import app as typer_app
 from seerAD.config import DATA_DIR, LOOT_DIR
 
 TIMEWRAP_FILE = LOOT_DIR / "timewrap.json"
+FAKETIME_LIB = "/usr/lib/x86_64-linux-gnu/faketime/libfaketime.so.1"
+
+if TIMEWRAP_FILE.exists() and "FAKETIME" not in os.environ:
+    timewrap_data = json.loads(TIMEWRAP_FILE.read_text())
+    offset = timewrap_data["offset"]
+    env = os.environ.copy()
+    env["LD_PRELOAD"] = FAKETIME_LIB
+    env["FAKETIME"] = offset
+    os.execve(sys.executable, [sys.executable, *sys.argv], env)
 
 class LimitedFileHistory(BaseFileHistory):
     """File history that limits the number of entries to prevent the history file from growing too large."""
@@ -345,22 +355,7 @@ def run_seer_command(args: List[str]) -> None:
     
     Args:
         args: List of command line arguments
-    """
-    # Check for timewrap
-    timewrap_file = LOOT_DIR / "timewrap.json"
-    
-    if timewrap_file.exists():
-        try:
-            with open(timewrap_file) as f:
-                timewrap_data = json.load(f)
-                faketime = timewrap_data.get("faketime")
-                if faketime:
-                    # Set environment variables for the current process
-                    os.environ["FAKETIME"] = faketime
-                    os.environ["LD_PRELOAD"] = "/usr/lib/x86_64-linux-gnu/faketime/libfaketime.so.1"
-        except Exception as e:
-            console.print(f"[yellow]Warning: Failed to apply timewrap: {e}[/]")
-    
+    """      
     try:
         # Always use typer_app with the modified environment
         typer_app(prog_name="seerAD", args=args)
@@ -385,11 +380,14 @@ def run_shell_command(cmd: str) -> None:
     try:
         cmd_name = cmd.split()[0]
         
+        # Get current environment
+        current_env = os.environ.copy()
+        
         # Handle interactive commands that need terminal control
         if cmd_name in INTERACTIVE_COMMANDS:
             old_settings = termios.tcgetattr(sys.stdin)
             try:
-                subprocess.run(cmd, shell=True)
+                subprocess.run(cmd, shell=True, env=current_env)
             finally:
                 termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old_settings)
         # Handle regular commands with output capture
@@ -399,7 +397,8 @@ def run_shell_command(cmd: str) -> None:
                 shell=True, 
                 capture_output=True, 
                 text=True,
-                cwd=os.getcwd()  # Use current working directory
+                cwd=os.getcwd(),  # Use current working directory
+                env=current_env    # Pass current environment
             )
             if result.stdout:
                 console.print(result.stdout, end="")
@@ -481,11 +480,7 @@ def run_interactive() -> None:
                 display_path = current_dir
                 
             # Build the prompt
-            # Check if timewrap is active
-            timewrap_active = TIMEWRAP_FILE.exists()
-
-            # Optional: show clock icon if active
-            clock_symbol = "◷" if timewrap_active else ""
+            clock_symbol = "◷" if TIMEWRAP_FILE.exists() else ""
 
             prompt_text = [
                 ("class:clock", clock_symbol),
