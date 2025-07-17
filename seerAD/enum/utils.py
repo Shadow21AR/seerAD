@@ -29,6 +29,11 @@ def build_auth_args_nxc(method: str, cred: dict) -> Tuple[List[str], Dict[str, s
             raise ValueError("Username and NTLM hash required.")
         return ["-u", cred["username"], "-H", cred["ntlm"]], {}
 
+    if method == "aes":
+        if not cred.get("username") or not cred.get("aes256") or not cred.get("aes128"):
+            raise ValueError("Username and AES hash required.")
+        return ["-u", cred["username"], "--aesKey", cred["aes256"] or cred["aes128"]], {}
+
     if method == "anon":
         return ["-u", "''", "-p", "''"], {}
 
@@ -38,7 +43,7 @@ def build_target_host(method: str) -> str:
     target = session.current_target
     ip = target.get("ip")
     fqdn = target.get("fqdn") or target.get("hostname") or ip
-    return fqdn if method == "ticket" else ip
+    return fqdn if method == "ticket" or "aes" else ip
 
 def run_nxc(tool: str, method: str, extra_args: List[str]):
     if not session.current_target_label:
@@ -69,7 +74,7 @@ def run_nxc(tool: str, method: str, extra_args: List[str]):
 # =============================
 
 def default_target_format(method: str, target: dict) -> str:
-    return target["fqdn"] if method == "ticket" else target["ip"]
+    return target["fqdn"] if method == "ticket" or "aes" else target["ip"]
 
 def resolve_flags(flags: List[str], cred: dict, target: dict) -> List[str]:
     resolved = []
@@ -200,14 +205,7 @@ IMPACKET_TOOL_CONFIG = {
             "aes": ["-aesKey", "<aes>", "-no-pass"]
         },
         "extra": ["-dc-ip", "{ip}"],
-    },
-    "getarch": {
-        "target": lambda m, t, c: (_ for _ in ()).throw(
-            ValueError("getArch does not support authentication")
-        ) if m != "anon" else "",
-        "auth": {"anon": []},
-        "extra": ["-target", "{ip}"],
-    },
+    }
 }
 
 def run_impacket(tool: str, method: str, extra_args: List[str]):

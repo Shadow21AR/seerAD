@@ -24,6 +24,6 @@ def run_enum(
         run_command(module, method, ctx.args)
     except Exception as e:
         console.print(f"[red][!] Error: {e}[/]")
-        raise typer.Exit(1)
+        return
 
 app = enum_app

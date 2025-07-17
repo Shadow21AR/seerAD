@@ -1,19 +1,20 @@
 from typing import Dict, Callable, List
 from .utils import run_impacket, run_nxc
+from seerAD.core.session import session
+from seerAD.cli.main import console
 
 COMMANDS = {
     # Impacket tools
-    "adcomputers":   lambda m, a: run_impacket("GetADComputers", m, a),
-    "adusers":       lambda m, a: run_impacket("GetADUsers", m, a),
-    "npusers":       lambda m, a: run_impacket("GetNPUsers", m, a),
-    "userspns":      lambda m, a: run_impacket("GetUserSPNs", m, a),
+    "adcomputers":      lambda m, a: run_impacket("GetADComputers", m, a),
+    "adusers":          lambda m, a: run_impacket("GetADUsers", m, a),
+    "npusers":          lambda m, a: run_impacket("GetNPUsers", m, a),
+    "userspns":         lambda m, a: run_impacket("GetUserSPNs", m, a),
     "finddelegation":   lambda m, a: run_impacket("findDelegation", m, a),
     "lookupsid":        lambda m, a: run_impacket("lookupsid", m, a),
     "rpcdump":          lambda m, a: run_impacket("rpcdump", m, a),
     "samrdump":         lambda m, a: run_impacket("samrdump", m, a),
     "netview":          lambda m, a: run_impacket("netview", m, a),
-    "arch":          lambda m, a: run_impacket("getArch", m, a),
-    "tgt":           lambda m, a: run_impacket("getTGT", m, a),
+    "gettgt":           lambda m, a: run_impacket("getTGT", m, a),
 
     # NXC tools
     "smb":              lambda m, a: run_nxc("smb", m, a),
@@ -31,7 +32,8 @@ COMMANDS = {
 def run_command(command: str, method: str, args: List[str]) -> None:
     handler = COMMANDS.get(command.lower())
     if not handler:
-        raise ValueError(f"Unknown command: {command}")
+        console.print(f"[red][!] Unknown command: {command}[/]")
+        return
     handler(method, args)
 
 def list_commands() -> Dict[str, Callable]:

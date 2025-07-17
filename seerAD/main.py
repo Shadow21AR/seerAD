@@ -152,16 +152,24 @@ class SeerCompleter(Completer):
             },
             "enum": {
                 "run": {
-                    "smb": {},
-                    "ldap": {},
-                    "winrm": {},
-                    "ssh": {},
-                    "rdp": {},
-                    "nfs": {},
-                    "vnc": {},
-                    "wmi": {},
-                    "GetNPUsers": {},
-                    "GetUserSPNs": {},
+                    "smb": self.get_auth_type,
+                    "ldap": self.get_auth_type,
+                    "winrm": self.get_auth_type,
+                    "ssh": self.get_auth_type,
+                    "rdp": self.get_auth_type,
+                    "nfs": self.get_auth_type,
+                    "vnc": self.get_auth_type,
+                    "wmi": self.get_auth_type,
+                    "adcomputers": self.get_auth_type,
+                    "adusers": self.get_auth_type,
+                    "npusers": self.get_auth_type,
+                    "userspns": self.get_auth_type,
+                    "finddelegation": self.get_auth_type,
+                    "lookupsid": self.get_auth_type,
+                    "rpcdump": self.get_auth_type,
+                    "samrdump": self.get_auth_type,
+                    "netview": self.get_auth_type,
+                    "gettgt": self.get_auth_type,
                 },
                 "list": {},
             },
@@ -225,6 +233,17 @@ class SeerCompleter(Completer):
             console.print(f"[yellow][!] Error getting target labels: {e}[/]")
             return []
 
+    def get_auth_type(self) -> List[str]:
+        """Get list of available auth types.
+        Returns:
+            List of auth types
+        """
+        try:
+            return ["anon", "password", "hash", "ticket", "aes"]
+        except Exception as e:
+            console.print(f"[yellow][!] Error getting auth types: {e}[/]")
+            return []
+    
     def _get_file_suggestions(self, text):
         from pathlib import Path
 
