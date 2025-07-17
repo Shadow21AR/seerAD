@@ -157,7 +157,7 @@ def creds_set(
     if updated:
         console.print(f"[green]✔ Updated {field}[/]")
     else:
-        console.print(f"[red]✘ Failed to update {field}[/]")
+        console.print(f"[yellow]No changes made to {field} (value was already set)[/]")
 
 @creds_app.command("del")
 def creds_del(
@@ -170,19 +170,19 @@ def creds_del(
 
     creds = session.get_credentials(username=username)
     if not creds:
-        console.print("[yellow]No credential found for user:[/] {username}")
+        console.print(f"[yellow]No credential found for user: {username}[/]")
         return
 
     if not force:
         confirm = typer.confirm(f"Delete credentials for '{username}'?")
         if not confirm:
-            console.print("[yellow]Cancelled.[/]")
+            console.print("[yellow]Operation cancelled.[/]")
             return
 
     deleted = session.delete_credential(session.current_target_label, username)
     if deleted:
-        if session.current_credential is None:
-            console.print(f"[yellow]Deleted selected credential. No credential is now active.[/]")
+        if session.current_credential and session.current_credential.get("username") == username:
+            console.print("[yellow]Deleted selected credential. No credential is now active.[/]")
         console.print(f"[green]✔ Deleted credentials for:[/] {username}")
     else:
         console.print("[red]✘ Failed to delete credential[/]")
