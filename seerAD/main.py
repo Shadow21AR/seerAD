@@ -417,21 +417,6 @@ def run_interactive() -> None:
     
     Handles command input, command routing, and maintains shell state.
     """
-    # Print welcome banner
-    console.rule(
-        "[bold]Seer CTF Assistant[/]",
-        style=THEME.PROMPT,
-        align="center"
-    )
-    console.print(
-        f"[dim]{'─' * 20} [bold {THEME.INFO}]Interactive Shell[/] {'─' * 20}[/]\n"
-        f"[dim]• Type [bold {THEME.COMMAND}]help[/] for available commands\n"
-        f"• Use [bold {THEME.COMMAND}]exit[/] or [bold {THEME.COMMAND}]quit[/] to exit\n"
-        f"• Press [bold {THEME.COMMAND}]Tab[/] for command completion\n"
-        f"• Shell commands work as normal (e.g., [bold {THEME.COMMAND}]ls[/], [bold {THEME.COMMAND}]cd[/], etc.)[/]"
-    )
-    console.print(f"[dim]{'─' * 60}[/]\n")
-
     current_dir = os.getcwd()
     seer_commands = SeerCompleter(get_cwd_func=lambda: current_dir)
     

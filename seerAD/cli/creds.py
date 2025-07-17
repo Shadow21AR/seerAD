@@ -221,11 +221,16 @@ def fetch_creds():
         console.print(f"[green]✔ NTLM:[/] {derived_ntlm}")
 
     # Fetch AES keys if missing
-    if password and not aes128 and not aes256:
-        console.print("[blue]→ Deriving AES keys from password...[/]")
-        aes128, aes256 = utils.derive_aes(password, domain, username)
-        session.update_credential(session.current_target_label, username, aes128=aes128, aes256=aes256)
+    if password and not aes128:
+        console.print("[blue]→ Deriving AES-128 from password...[/]")
+        aes128 = utils.derive_aes(password, domain, username)
+        session.update_credential(session.current_target_label, username, aes128=aes128)
         console.print(f"[green]✔ AES-128:[/] {aes128}")
+    
+    if password and not aes256:
+        console.print("[blue]→ Deriving AES-256 from password...[/]")
+        aes256 = utils.derive_aes(password, domain, username)
+        session.update_credential(session.current_target_label, username, aes256=aes256)
         console.print(f"[green]✔ AES-256:[/] {aes256}")
 
     # Fetch Ticket if not present and we have any usable secret
@@ -263,5 +268,8 @@ def fetch_creds():
                 console.print(f"[red]✘ Failed to copy or update credential:[/] {e}")
         else:
             console.print(f"[red]Ticket fetch failed:[/] {result}")
+    
+    # Fetch cert if not present and we have any usable secret
+    # Not implemented yet
  
 app = creds_app
