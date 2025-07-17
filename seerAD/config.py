@@ -23,4 +23,4 @@ LOGS_DIR = USER_DATA_DIR / "logs"
 for d in [DATA_DIR, LOOT_DIR, LOGS_DIR]:
     d.mkdir(parents=True, exist_ok=True)
 
-VERSION = "0.1.1"
+VERSION = "0.1.2"

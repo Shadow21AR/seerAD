@@ -10,8 +10,8 @@ enum_app = typer.Typer(help="Enumeration commands", add_completion=False)
 def list_modules():
     """List available enumeration modules"""
     console.print("[cyan bold]Available Enum Modules:[/]")
-    for cmd in sorted(list_commands().keys()):
-        console.print(f" - [green]{cmd}[/]")
+    cmds = ", ".join(sorted(list_commands().keys()))
+    console.print(f"[green]{cmds}[/]")
 
 @enum_app.command("run", context_settings={"allow_extra_args": True, "ignore_unknown_options": True})
 def run_enum(
