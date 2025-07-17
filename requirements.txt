@@ -5,3 +5,4 @@ minikerberos>=0.4.0
 impacket>=0.10.0
 pycryptodome>=3.19.0
 urllib3>=1.21.1,<1.25
+python-dateutil>=2.8.2
