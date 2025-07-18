@@ -3,7 +3,7 @@ import subprocess
 from typing import List, Dict, Tuple
 from rich.console import Console
 from seerAD.core.session import session
-from seerAD.tool_handler.helper import impacket_identity, resolve_flags
+from seerAD.tool_handler.helper import impacket_identity, resolve_flags, run_tool
 
 console = Console()
 
@@ -148,9 +148,7 @@ def run_impacket(tool: str, method: str, extra_args: List[str]):
             env["KRB5CCNAME"] = cred["ticket"]
         env["PYTHONWARNINGS"] = "ignore::UserWarning"
 
-        console.print(f"[dim]Running Command:[/] [yellow]{' '.join(cmd)}[/]")
-        result = subprocess.run(cmd, capture_output=True, text=True, env=env)
-        console.print(result.stdout.strip() + "\n" + result.stderr.strip())
+        run_tool(cmd, env=env)
 
     except Exception as e:
         console.print(f"[red]{tool} error: {e}[/]")

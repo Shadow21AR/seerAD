@@ -173,7 +173,12 @@ class SeerCompleter(Completer):
                 },
                 "list": {},
             },
-            "abuse": {},
+            "abuse": {
+                "run": {
+                    "userspns": self.get_auth_type,
+                },
+                "list": {},
+            },
             "tasks": {},
             "timewrap": {
                 "set": {},

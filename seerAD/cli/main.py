@@ -21,6 +21,7 @@ from seerAD.cli import target as target_cmd
 from seerAD.cli import creds as creds_cmd
 from seerAD.cli import timewrap as timewrap_cmd
 from seerAD.cli import enum as enum_cmd
+from seerAD.cli import abuse as abuse_cmd
 
 # Register CLI commands
 app.command("reset")(reset_cmd.reset_session)
@@ -28,3 +29,4 @@ app.add_typer(target_cmd.app, name="target", help="Manage targets")
 app.add_typer(creds_cmd.app, name="creds", help="Manage credentials")
 app.add_typer(timewrap_cmd.app, name="timewrap", help="Time management commands")
 app.add_typer(enum_cmd.app, name="enum", help="Enumeration commands")
+app.add_typer(abuse_cmd.app, name="abuse", help="Abuse commands")

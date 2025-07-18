@@ -1,7 +1,6 @@
 import typer
 from typing import List, Optional
 from rich.console import Console
-from seerAD.core.session import session
 from seerAD.tool_handler.impacket_helper import run_impacket
 from seerAD.tool_handler.nxc_helper import run_nxc
 from seerAD.tool_handler.helper import run_command
@@ -51,10 +50,6 @@ def run_enum(
 ):
     """Run a specific enum module with auth method and optional args."""
     try:
-        creds = session.current_credential
-        if not creds.get(method):
-            console.print(f"[yellow]You dont have {method} in your selected credentials. Check availbale auth method via 'creds info'[/]")
-            return
         run_command(module, method, ctx.args, COMMANDS)
     except Exception as e:
         console.print(f"[red][!] Error: {e}[/]")
