@@ -6,6 +6,7 @@ import shlex
 import subprocess
 import sys
 import termios
+import re
 from pathlib import Path
 from typing import List
 import json
@@ -275,11 +276,7 @@ class SeerCompleter(Completer):
             # If it's not an existing file or dir, suggest matching entries in its parent
             parent = path.parent if path.parent.exists() else cwd
             prefix = path.name
-            return [
-                f"@{str(f)}"
-                for f in parent.iterdir()
-                if f.name.startswith(prefix) and not f.name.startswith('.')
-            ]
+            return [f"@{str(f)}" for f in parent.iterdir() if f.name.startswith(prefix)]
         except Exception:
             return []
 
@@ -391,6 +388,21 @@ def run_seer_command(args: List[str]) -> None:
     except Exception as e:
         console.print(f"[red][!] Error executing command: {e}[/]")
 
+def resolve_at_files(cmdline: str) -> str:
+    """
+    Replace @<path> tokens with full resolved path *only if* it looks like a valid local file or directory.
+    """
+    def replace_match(match):
+        raw_path = match.group(1)
+        expanded = os.path.expanduser(raw_path)
+        path = Path(expanded)
+        if path.exists():
+            return str(path.resolve())
+        else:
+            # Not a real path, leave as-is
+            return f"@{raw_path}"
+
+    return re.sub(r'@([^\s]+)', replace_match, cmdline)
 
 def run_shell_command(cmd: str) -> None:
     """Execute a shell command with proper terminal handling.
@@ -503,6 +515,7 @@ def run_interactive() -> None:
             # Get user input with completion
             try:
                 cmdline = prompt.prompt(prompt_text)
+                cmdline = resolve_at_files(cmdline)
             except KeyboardInterrupt:
                 console.print(f"\n[{THEME.INFO}][*] Command cancelled")
                 continue
