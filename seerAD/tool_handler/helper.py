@@ -37,6 +37,20 @@ def build_target_host_bloodyAD(method: str) -> List[str]:
     target = session.current_target
     return ["--host", target["fqdn"], "-d", target["domain"]]
 
+def build_target_host_certipy(method: str) -> List[str]:
+    cred = session.current_credential or {}
+    target = session.current_target or {}
+    args = []
+    if "target" in target:
+        args += ["-target", target["target"]]
+    elif "fqdn" in target:
+        args += ["-target", target["fqdn"]]
+    elif "ip" in target:
+        args += ["-target", target["ip"]]
+
+    if "ip" in target:
+        args += ["-dc-ip", target["ip"]]
+    return args
 
 def default_target_format(method: str, target: dict) -> str:
     return target["fqdn"] if method == "ticket" or "aes" else target["ip"]

@@ -2,6 +2,7 @@ import typer
 from typing import List, Optional
 from rich.console import Console
 from seerAD.tool_handler.bloodyad_helper import run_bloodyad
+from seerAD.tool_handler.certipyad_helper import run_certipy
 from seerAD.tool_handler.helper import run_command
 from seerAD.core.session import session
 
@@ -38,6 +39,18 @@ COMMANDS = {
     "set_owner":            lambda m, a: run_bloodyad(["set", "owner"], m, ["-h"] if not a else a),
     "set_password":         lambda m, a: run_bloodyad(["set", "password"], m, ["-h"] if not a else a),
     "set_restore":          lambda m, a: run_bloodyad(["set", "restore"], m, ["-h"] if not a else a),
+    # Certipy-AD tools
+    "certipy_account":      lambda m, a: run_certipy("account", m, ["-h"] if not a else a),
+    "certipy_auth":         lambda m, a: run_certipy("auth", m, ["-h"] if not a else a),
+    "certipy_ca":           lambda m, a: run_certipy("ca", m, ["-h"] if not a else a),
+    "certipy_cert":         lambda m, a: run_certipy("cert", m, ["-h"] if not a else a),
+    "certipy_find":         lambda m, a: run_certipy("find", m, ["-h"] if not a else a),
+    "certipy_parse":        lambda m, a: run_certipy("parse", m, ["-h"] if not a else a),
+    "certipy_forge":        lambda m, a: run_certipy("forge", m, ["-h"] if not a else a),
+    "certipy_relay":        lambda m, a: run_certipy("relay", m, ["-h"] if not a else a),
+    "certipy_req":          lambda m, a: run_certipy("req", m, ["-h"] if not a else a),
+    "certipy_shadow":       lambda m, a: run_certipy("shadow", m, ["-h"] if not a else a),
+    "certipy_template":     lambda m, a: run_certipy("template", m, ["-h"] if not a else a),
 }
 
 def list_modules():
