@@ -7,7 +7,6 @@ from seerAD.tool_handler.helper import run_command
 from seerAD.core.session import session
 
 console = Console()
-enum_app = typer.Typer(help="Enumeration commands", add_completion=False)
 
 COMMANDS = {
     # Impacket tools
@@ -35,7 +34,6 @@ COMMANDS = {
     "ftp":              lambda m, a: run_nxc("ftp", m, a),
 }
 
-@enum_app.command("list")
 def list_modules():
     """List available enumeration modules"""
     console.print("[cyan bold]Available Enum Modules:[/]")
@@ -43,19 +41,24 @@ def list_modules():
 
     console.print(f"[green]{cmds}[/]")
 
-@enum_app.command("run", context_settings={"allow_extra_args": True, "ignore_unknown_options": True})
-def run_enum(
-    ctx: typer.Context,
-    module: str = typer.Argument(..., help="Enum module name (e.g., smb)"),
-    method: Optional[str] = typer.Argument("anon", help="Auth method (ticket, password, ntlm, aes128, aes256, anon)")
-):
-    """Run a specific enum module with auth method and optional args."""
+def enum_callback(ctx: typer.Context):
+    """Handle enum commands dynamically
+    enum <command> <auth_method> [args...]"""
+    if not ctx.args:
+        list_modules()
+        return
+    module = ctx.args[0]
+    method = ctx.args[1] if len(ctx.args) > 1 else "anon"
+    extra_args = ctx.args[2:] if len(ctx.args) > 2 else []
+    if module not in COMMANDS:
+        console.print(f"[red][!] Unknown command: {module}[/]\n")
+        console.print(list_modules())
+        return
+    # Ticket fallback logic
+    if method == "anon" and session.current_credential.get("ticket") and len(ctx.args) == 1:
+        method = "ticket"
     try:
-        if session.current_credential.get("ticket") and method == "anon":
-            method = "ticket"
-        run_command(module, method, ctx.args, COMMANDS)
+        run_command(module, method, extra_args, COMMANDS)
     except Exception as e:
         console.print(f"[red][!] Error: {e}[/]")
         return
-
-app = enum_app

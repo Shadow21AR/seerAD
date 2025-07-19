@@ -47,17 +47,17 @@ def set_time(dc_ip: Optional[str] = typer.Argument(None, help="DC IP to sync tim
 
     if not session.current_target_label:
         console.print("[red]No active target. Use 'target switch' first.[/]")
-        raise typer.Exit()
+        return
 
     if not dc_ip:
         dc_ip = session.current_target.get("ip")
         if not dc_ip:
             console.print("[red]No DC IP provided or found in current target.[/]")
-            raise typer.Exit()
+            return
     
     if os.getenv("LD_PRELOAD") and "libfaketime" in os.getenv("LD_PRELOAD", ""):
         console.print("[yellow]Already under faketime. Reset it first.[/]")
-        raise typer.Exit()
+        return
     
 
     console.print(f"[blue]Fetching time from DC {dc_ip}...[/]")
@@ -65,7 +65,7 @@ def set_time(dc_ip: Optional[str] = typer.Argument(None, help="DC IP to sync tim
 
     if offset is None:
         console.print("[red]✘ Failed to fetch or calculate time offset from DC[/]")
-        raise typer.Exit()
+        return
 
     # Save the new configuration
     save_timewrap_config(dc_ip, offset)

@@ -33,6 +33,11 @@ def build_target_host(method: str) -> str:
     fqdn = target.get("fqdn") or target.get("hostname") or ip
     return fqdn if method == "ticket" or "aes" else ip
 
+def build_target_host_bloodyAD(method: str) -> List[str]:
+    target = session.current_target
+    return ["--host", target["fqdn"], "-d", target["domain"]]
+
+
 def default_target_format(method: str, target: dict) -> str:
     return target["fqdn"] if method == "ticket" or "aes" else target["ip"]
 

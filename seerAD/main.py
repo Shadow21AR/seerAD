@@ -8,7 +8,7 @@ import sys
 import termios
 import re
 from pathlib import Path
-from typing import List
+from typing import List, Dict, Callable
 import json
 
 # Third-party imports
@@ -23,6 +23,8 @@ from datetime import datetime, timedelta
 # Local application imports
 from seerAD.cli.main import app as typer_app
 from seerAD.config import DATA_DIR, LOOT_DIR
+from seerAD.cli.abuse import COMMANDS as abuse_commands
+from seerAD.cli.enum import COMMANDS as enum_commands
 
 TIMEWRAP_FILE = LOOT_DIR / "timewrap.json"
 FAKETIME_LIB = "/usr/lib/x86_64-linux-gnu/faketime/libfaketime.so.1"
@@ -151,36 +153,9 @@ class SeerCompleter(Completer):
                 },
                 "fetch": {},
             },
-            "enum": {
-                "run": {
-                    "smb": self.get_auth_type,
-                    "ldap": self.get_auth_type,
-                    "winrm": self.get_auth_type,
-                    "ssh": self.get_auth_type,
-                    "rdp": self.get_auth_type,
-                    "nfs": self.get_auth_type,
-                    "vnc": self.get_auth_type,
-                    "wmi": self.get_auth_type,
-                    "adcomputers": self.get_auth_type,
-                    "adusers": self.get_auth_type,
-                    "npusers": self.get_auth_type,
-                    "userspns": self.get_auth_type,
-                    "finddelegation": self.get_auth_type,
-                    "lookupsid": self.get_auth_type,
-                    "rpcdump": self.get_auth_type,
-                    "samrdump": self.get_auth_type,
-                    "netview": self.get_auth_type,
-                    "gettgt": self.get_auth_type,
-                },
-                "list": {},
-            },
-            "abuse": {
-                "run": {
-                    "userspns": self.get_auth_type,
-                },
-                "list": {},
-            },
-            "tasks": {},
+            "enum": self.get_enum_module_tree(),
+            "abuse": self.get_abuse_module_tree(),
+            "smart": {},
             "timewrap": {
                 "set": {},
                 "reset": {},
@@ -192,7 +167,7 @@ class SeerCompleter(Completer):
                 "creds": {},
                 "enum": {},
                 "abuse": {},
-                "tasks": {},
+                "smart": {},
                 "timewrap": {},
                 "exit": {},
                 "quit": {}
@@ -216,17 +191,20 @@ class SeerCompleter(Completer):
             console.print(f"[yellow][!] Error getting credential users: {e}[/]")
             return []
 
-    def get_enum_modules(self) -> List[str]:
-        """Get list of available enum modules.
+    def get_abuse_module_tree(self) -> Dict[str, Callable]:
+        """Get list of abuse modules.
         Returns:
-            List of enum module names
+            Dictionary of abuse modules
         """
-        try:
-            return list(get_enum_module.__globals__['ENUM_MODULES'].keys())
-        except Exception as e:
-            console.print(f"[yellow][!] Error getting enum modules: {e}[/]")
-            return []
-    
+        return {name: lambda: self.get_auth_type(['anon']) for name in abuse_commands}
+
+    def get_enum_module_tree(self) -> Dict[str, Callable]:
+        """Get list of enum modules.
+        Returns:
+            Dictionary of enum modules
+        """
+        return {name: lambda: self.get_auth_type() for name in enum_commands}
+
     def get_target_labels(self) -> List[str]:
         """Get list of all target labels from the session.
         Returns:
@@ -239,13 +217,14 @@ class SeerCompleter(Completer):
             console.print(f"[yellow][!] Error getting target labels: {e}[/]")
             return []
 
-    def get_auth_type(self) -> List[str]:
+    def get_auth_type(self, exclude: List[str] = []) -> List[str]:
         """Get list of available auth types.
         Returns:
             List of auth types
         """
         try:
-            return ["anon", "password", "ntlm", "ticket", "aes128", "aes256"]
+            auth_types = ["anon", "password", "ntlm", "ticket", "aes128", "aes256"]
+            return [t for t in auth_types if t not in exclude]
         except Exception as e:
             console.print(f"[yellow][!] Error getting auth types: {e}[/]")
             return []
