@@ -40,23 +40,12 @@ COMMANDS = {
     "set_restore":          lambda m, a: run_bloodyad(["set", "restore"], m, ["-h"] if not a else a),
 }
 
-def list_abuse_commands():
-    """List all available abuse commands"""
-    commands = sorted(COMMANDS.keys())
-    colored_commands = []
-    for cmd in commands:
-        if cmd.startswith('add_'):
-            color = "#4ECDC4"  # Teal
-        elif cmd.startswith('get_'):
-            color = "#45B7D1"  # Blue
-        elif cmd.startswith('remove_'):
-            color = "#FF6B6B"  # Coral
-        elif cmd.startswith('set_'):
-            color = "#FFD166"  # Yellow
-        else:
-            color = "#C792EA"  # Purple
-        colored_commands.append(f"[{color}]{cmd}[/]")
-    return "[bold #FF6B6B]Available Abuse Commands[/]\n" + ", ".join(colored_commands) + "\n[white]Type [white]abuse <command> <auth_method> \\[args...][/] to execute a command[/]"
+def list_modules():
+    """List available abuse modules"""
+    console.print("[cyan bold]Available Abuse Modules:[/]")
+    cmds = ", ".join(sorted(COMMANDS.keys()))
+
+    console.print(f"[green]{cmds}[/]")
 
 def abuse_callback(ctx: typer.Context):
     """
@@ -64,7 +53,7 @@ def abuse_callback(ctx: typer.Context):
     abuse <command> <auth_method> [args...]
     """
     if not ctx.args:
-        console.print(list_abuse_commands())
+        list_modules()
         return
 
     module = ctx.args[0]
@@ -73,7 +62,7 @@ def abuse_callback(ctx: typer.Context):
 
     if module not in COMMANDS:
         console.print(f"[red][!] Unknown command: {module}[/]\n")
-        console.print(list_abuse_commands())
+        list_modules()
         return
     # Ticket fallback logic
     if method == "anon" and session.current_credential.get("ticket") and len(ctx.args) == 1:
