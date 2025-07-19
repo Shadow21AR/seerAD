@@ -1,6 +1,7 @@
 
 import os
 import subprocess
+import shutil
 from typing import List, Dict, Tuple
 from rich.console import Console
 from seerAD.core.session import session
@@ -20,42 +21,57 @@ def build_auth_args_nxc(method: str, cred: dict) -> Tuple[List[str], Dict[str, s
             raise ValueError("Username and password required.")
         return ["-u", cred["username"], "-p", cred["password"]], {}
 
-    if method == "hash":
+    if method == "ntlm":
         if not cred.get("username") or not cred.get("ntlm"):
             raise ValueError("Username and NTLM hash required.")
         return ["-u", cred["username"], "-H", cred["ntlm"]], {}
 
-    if method == "aes":
-        if not cred.get("username") or not cred.get("aes256") or not cred.get("aes128"):
+    if method == "aes128":
+        if not cred.get("username") or not cred.get("aes128"):
             raise ValueError("Username and AES hash required.")
-        return ["-u", cred["username"], "--aesKey", cred["aes256"] or cred["aes128"]], {}
+        return ["-u", cred["username"], "--aesKey", cred["aes128"]], {}
+
+    if method == "aes256":
+        if not cred.get("username") or not cred.get("aes256"):
+            raise ValueError("Username and AES hash required.")
+        return ["-u", cred["username"], "--aesKey", cred["aes256"]], {}
 
     if method == "anon":
         return ["-u", "''", "-p", "''"], {}
 
     raise ValueError(f"Unsupported auth method: {method}")
 
-def get_ldap_args() -> List[str]:
-    """Get LDAP specific command line arguments based on session data.
+def get_extra_args(tool: str) -> List[str]:
+    """Get extra arguments based on session data.
     
     Returns:
-        List of command line arguments for LDAP operations
+        List of command line arguments for tool
     """
-    ldap_args = []
+    extra_args = []
     if not hasattr(session, 'current_target'):
-        return ldap_args
+        return extra_args
+    
+    if tool.lower() in ["ldap", "winrm", "rdp", "wmi"]:
+        # Add domain if available in session
+        if session.current_target.get('domain'):
+            extra_args.extend(["-d", session.current_target['domain']])
         
-    # Add domain if available in session
-    if session.current_target.get('domain'):
-        ldap_args.extend(["-d", session.current_target['domain']])
+        # Add DNS server if available in session
+        if session.current_target.get('ip'):
+            extra_args.extend(["--dns-server", session.current_target['ip']])
     
-    # Add DNS server if available in session
-    if session.current_target.get('ip'):
-        ldap_args.extend(["--dns-server", session.current_target['ip']])
+    if tool.lower() in ["ssh", "nfs", "vnc"]:
+        if session.current_target.get('ip'):
+            extra_args.extend(["--dns-server", session.current_target['ip']])
     
-    return ldap_args
+    return extra_args
 
 def run_nxc(tool: str, method: str, extra_args: List[str]):
+    if shutil.which("nxc") is None:
+        console.print("[red]nxc not found. Please install nxc.[/]")
+        console.print("[yellow]You can install nxc using 'pipx install nxc'.[/]")
+        return
+
     if not session.current_target_label:
         console.print("[red]No target set.[/]")
         return
@@ -67,7 +83,7 @@ def run_nxc(tool: str, method: str, extra_args: List[str]):
     try:
         target = build_target_host(method)
         auth_args, env_vars = build_auth_args_nxc(method, session.current_credential or {})
-        more_args = get_ldap_args() if tool.lower() == "ldap" else []
+        more_args = get_extra_args(tool)
         
         cmd = ["nxc", tool, target] + auth_args + more_args + extra_args
 

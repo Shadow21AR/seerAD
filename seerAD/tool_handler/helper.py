@@ -18,8 +18,8 @@ def run_tool(cmd: List[str], env: Dict[str, str] = None) -> None:
 
 def run_command(command: str, method: str, args: List[str], COMMANDS: Dict[str, Callable]) -> None:
     creds = session.current_credential
-    if not creds.get(method):
-        console.print(f"[yellow]You dont have {method} in your selected credentials. Check availbale auth method via 'creds info'[/]")
+    if not creds.get(method) and not method == "anon":
+        console.print(f"[yellow]You dont have {method} in your selected credentials. Check available auth method via 'creds info'[/]")
         return
     handler = COMMANDS.get(command.lower())
     if not handler:
@@ -52,7 +52,7 @@ def resolve_flags(flags: List[str], cred: dict, target: dict) -> List[str]:
 def impacket_identity(method: str, target: dict, cred: dict) -> str:
     if method == "password":
         return f"{target['domain']}/{cred['username']}:{cred['password']}"
-    elif method in ("ticket", "hash", "aes"):
+    elif method in ("ticket", "ntlm", "aes128", "aes256"):
         return f"{target['domain']}/{cred['username']}"
     elif method == "anon":
         raise ValueError("Anonymous auth is not supported for this tool.")

@@ -245,7 +245,7 @@ class SeerCompleter(Completer):
             List of auth types
         """
         try:
-            return ["anon", "password", "hash", "ticket", "aes"]
+            return ["anon", "password", "ntlm", "ticket", "aes128", "aes256"]
         except Exception as e:
             console.print(f"[yellow][!] Error getting auth types: {e}[/]")
             return []
@@ -382,7 +382,9 @@ def run_seer_command(args: List[str]) -> None:
         typer_app(prog_name="seerAD", args=args)
             
     except SystemExit as e:
-        if e.code != 0 and args:  # Only show error if args is not empty
+        if e.code == 130:
+            console.print(f"[{THEME.INFO}][*] Interrupted. Exiting...")
+        elif e.code != 0 and args: 
             console.print(f"[red][!] Error: Unknown or invalid command '{args[0]}'[/]")
             console.print("[yellow]Type 'help' for available commands[/]")
     except Exception as e:
@@ -517,10 +519,10 @@ def run_interactive() -> None:
                 cmdline = prompt.prompt(prompt_text)
                 cmdline = resolve_at_files(cmdline)
             except KeyboardInterrupt:
-                console.print(f"\n[{THEME.INFO}][*] Command cancelled")
+                console.print(f"[{THEME.INFO}][*] Command cancelled")
                 continue
             except EOFError:
-                console.print(f"\n[{THEME.SUCCESS}][*] Goodbye")
+                console.print(f"[{THEME.SUCCESS}][*] Goodbye")
                 break
 
             # Handle empty input
@@ -529,7 +531,7 @@ def run_interactive() -> None:
                 
             # Handle exit commands
             if cmdline.strip().lower() in ("exit", "quit"):
-                console.print(f"\n[{THEME.SUCCESS}][*] Goodbye")
+                console.print(f"[{THEME.SUCCESS}][*] Goodbye")
                 break
                 
             try:
@@ -627,10 +629,10 @@ def main() -> None:
         else:
             run_interactive()
     except KeyboardInterrupt:
-        console.print(f"\n[{THEME.INFO}][*] Interrupted. Exiting...")
+        console.print(f"[{THEME.INFO}][*] Interrupted. Exiting...")
         sys.exit(1)
     except Exception as e:
-        console.print(f"\n[bold {THEME.ERROR}][!] Fatal error: {e}")
+        console.print(f"[bold {THEME.ERROR}][!] Fatal error: {e}")
         if os.getenv("SEER_DEBUG"):
             console.print_exception()
         sys.exit(1)

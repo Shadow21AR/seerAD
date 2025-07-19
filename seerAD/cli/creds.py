@@ -60,7 +60,7 @@ def creds_add(
         return
 
     if not any([password, ntlm, aes128, aes256, ticket, cert]):
-        console.print("[red]Provide at least one credential secret (password, hash, ticket, etc.)[/]")
+        console.print("[red]Provide at least one credential secret (password, ntlm, aes128, aes256, ticket, etc.)[/]")
         return
 
     existing = session.get_credentials(username=username)
@@ -223,13 +223,13 @@ def fetch_creds():
     # Fetch AES keys if missing
     if password and not aes128:
         console.print("[blue]→ Deriving AES-128 from password...[/]")
-        aes128 = utils.derive_aes(password, domain, username)
+        aes128 = utils.derive_aes(password, domain, username)[0]
         session.update_credential(session.current_target_label, username, aes128=aes128)
         console.print(f"[green]✔ AES-128:[/] {aes128}")
     
     if password and not aes256:
         console.print("[blue]→ Deriving AES-256 from password...[/]")
-        aes256 = utils.derive_aes(password, domain, username)
+        aes256 = utils.derive_aes(password, domain, username)[1]
         session.update_credential(session.current_target_label, username, aes256=aes256)
         console.print(f"[green]✔ AES-256:[/] {aes256}")
 
